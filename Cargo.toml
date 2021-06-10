@@ -1,5 +1,5 @@
 [package]
-name = "rust-lang"
+name = "ham"
 version = "0.1.0"
 edition = "2018"
 
