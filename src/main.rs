@@ -2,10 +2,9 @@ use std::ops::Deref;
 
 mod ham {
 
-    use regex::Regex;
-    use crate::ham::ast_operations::{VarDefinitionBase, ExpressionBase};
+    use crate::ham::ast_operations::{ExpressionBase, VarDefinitionBase};
     use crate::ham::primitive_values::BooleanValueBase;
-
+    use regex::Regex;
 
     type LinesList = Vec<Vec<String>>;
     type TokensList = Vec<Token>;
@@ -52,14 +51,13 @@ mod ham {
             fn get_state(&self) -> bool {
                 self.0
             }
-
         }
     }
-    
+
     pub mod ast_operations {
-        use crate::ham::{primitive_values,PrimitiveValue, tokens_type};
-        use std::any::Any;
         use crate::ham::primitive_values::BooleanValueBase;
+        use crate::ham::{primitive_values, tokens_type, PrimitiveValue};
+        use std::any::Any;
 
         /* BASE */
         pub trait AstBase {
@@ -69,7 +67,7 @@ mod ham {
 
         pub struct Ast {
             pub body: Vec<Box<dyn self::AstBase>>,
-            pub token_type: tokens_type::Val
+            pub token_type: tokens_type::Val,
         }
 
         /* VARIABLE DEFINITION */
@@ -78,22 +76,21 @@ mod ham {
             fn new(def_name: String, assignment: Assignment) -> Self;
         }
 
-
         pub struct VarDefinition {
             pub def_name: String,
-            pub assignment: Assignment
+            pub assignment: Assignment,
         }
 
         impl VarDefinitionBase for VarDefinition {
-           fn get_def_name(&self) -> String {
-                return self.def_name.clone()
-           }
-           fn new(def_name: String, assignment: Assignment) -> VarDefinition {
+            fn get_def_name(&self) -> String {
+                return self.def_name.clone();
+            }
+            fn new(def_name: String, assignment: Assignment) -> VarDefinition {
                 VarDefinition {
                     def_name,
-                    assignment
+                    assignment,
                 }
-           }
+            }
         }
 
         impl AstBase for VarDefinition {
@@ -109,7 +106,7 @@ mod ham {
 
         pub struct Assignment {
             pub interface: PrimitiveValue,
-            pub value: Box<dyn self::primitive_values::PrimitiveValueBase>
+            pub value: Box<dyn self::primitive_values::PrimitiveValueBase>,
         }
 
         impl AstBase for Assignment {
@@ -125,7 +122,7 @@ mod ham {
             fn new(&self) -> Assignment {
                 Assignment {
                     interface: String::from(""),
-                    value: Box::new(self::primitive_values::Boolean::new(false))
+                    value: Box::new(self::primitive_values::Boolean::new(false)),
                 }
             }
         }
@@ -134,7 +131,7 @@ mod ham {
 
         pub struct Expression {
             pub body: Vec<Box<dyn self::AstBase>>,
-            pub token_type: tokens_type::Val
+            pub token_type: tokens_type::Val,
         }
 
         impl AstBase for Expression {
@@ -151,10 +148,10 @@ mod ham {
         }
 
         impl ExpressionBase for Expression {
-             fn new() -> Expression {
+            fn new() -> Expression {
                 Expression {
                     token_type: self::tokens_type::EXPRESSION,
-                    body: Vec::new()
+                    body: Vec::new(),
                 }
             }
         }
@@ -162,27 +159,25 @@ mod ham {
 
     pub struct Token {
         ast_type: i32,
-        value: String
+        value: String,
     }
 
     fn get_lines(code: String) -> LinesList {
         let mut lines = Vec::new();
 
         // Every line
-        for line in code.split("\n"){
-
+        for line in code.split("\n") {
             let line = String::from(line);
             let mut line_ast = Vec::new();
 
             let re = Regex::new(r"[\s+,:]|([()])").unwrap();
 
             // Every detected word
-            for word in re.split(&line){
+            for word in re.split(&line) {
                 // Prevent empty words
                 if word != "" {
                     line_ast.push(String::from(word))
                 }
-
             }
             lines.push(line_ast);
         }
@@ -195,22 +190,20 @@ mod ham {
 
         for line in lines {
             for word in line {
-
                 let word = String::from(word);
 
                 let token_type: tokens_type::Val = match word.as_str() {
                     "let" => tokens_type::VAR_DEF,
                     "=" => tokens_type::LEFT_ASSIGN,
-                    _ => tokens_type::DEFAULT
+                    _ => tokens_type::DEFAULT,
                 };
 
                 let ast_token = Token {
                     ast_type: token_type,
-                    value: word.clone()
+                    value: word.clone(),
                 };
 
                 tokens.push(ast_token);
-
             }
         }
 
@@ -222,9 +215,7 @@ mod ham {
         return self::transform_into_tokens(lines);
     }
 
-
     pub fn get_ast(tokens: TokensList) -> self::ast_operations::Expression {
-
         let mut ast_tree = self::ast_operations::Expression::new();
 
         let mut token_n = 0;
@@ -234,39 +225,36 @@ mod ham {
 
             match current_token.ast_type {
                 tokens_type::VAR_DEF => {
-                    let def_name = String::from(&tokens[token_n+1].value.clone());
+                    let def_name = String::from(&tokens[token_n + 1].value.clone());
 
-                    let def_value = String::from(&tokens[token_n+3].value.clone());
-
+                    let def_value = String::from(&tokens[token_n + 3].value.clone());
 
                     let def_value_type = match def_value.as_str() {
                         "True" => self::primitive_values::Boolean::new(true),
                         "False" => self::primitive_values::Boolean::new(false),
-                        _ => self::primitive_values::Boolean::new(false)
+                        _ => self::primitive_values::Boolean::new(false),
                     };
 
-                    let assignment =  ast_operations::Assignment {
+                    let assignment = ast_operations::Assignment {
                         interface: String::from("number"),
-                        value: Box::new(def_value_type)
+                        value: Box::new(def_value_type),
                     };
 
                     let mut ast_token = ast_operations::VarDefinition::new(def_name, assignment);
 
                     ast_tree.body.push(Box::new(ast_token));
                 }
-                _ => ()
+                _ => (),
             }
 
             token_n += 1;
         }
 
-        return ast_tree
+        return ast_tree;
     }
-
 }
 
 fn main() {
-
     use crate::ham::primitive_values::BooleanValueBase;
 
     let code = "let test = True \nlet ok = False \n ";
@@ -274,22 +262,28 @@ fn main() {
     println!("` \n {} \n`", code);
 
     let get_ast_tree = ham::get_tokens(String::from(code));
-    let ast  = ham::get_ast(get_ast_tree);
+    let ast = ham::get_ast(get_ast_tree);
 
-    for op in ast.body  {
-        
+    for op in ast.body {
         match op.get_type() {
             ham::tokens_type::VAR_DEF => {
-
-                let variable= op.as_self()
+                let variable = op
+                    .as_self()
                     .downcast_ref::<ham::ast_operations::VarDefinition>()
                     .unwrap();
 
-                let assignment = variable.assignment.value.as_self()
+                let assignment = variable
+                    .assignment
+                    .value
+                    .as_self()
                     .downcast_ref::<ham::primitive_values::Boolean>()
                     .unwrap();
 
-                println!("[ type: variable | name: {} | value: {:?} ]", variable.def_name, assignment.get_state())
+                println!(
+                    "[ type: variable | name: {} | value: {:?} ]",
+                    variable.def_name,
+                    assignment.get_state()
+                )
             }
             _ => {
                 println!("IDK")
