@@ -20,6 +20,11 @@ pub mod tokens_type {
 pub mod primitive_values {
     use std::any::Any;
 
+    pub type ValueType = i32;
+    pub const BOOLEAN: ValueType = 7;
+    pub const NUMBER: ValueType = 8;
+    pub const STRING: ValueType = 9;
+
     pub trait PrimitiveValueBase {
         fn get_type(&self) -> String;
         fn as_self(&self) -> &dyn Any;
@@ -106,6 +111,31 @@ pub mod ast_operations {
     pub struct Ast {
         pub body: Vec<Box<dyn self::AstBase>>,
         pub token_type: crate::tokens_type::Val,
+    }
+
+    /* FUNCTION ARGUMENT */
+    pub struct Argument {
+        pub val_type: crate::tokens_type::Val,
+        pub value: String,
+    }
+
+    impl Argument {
+        pub fn new(value: String) -> Argument {
+            let val_type = match value.clone() {
+                val if val.chars().nth(0).unwrap() == '"'
+                    && val.chars().nth(val.len() - 1).unwrap() == '"' =>
+                {
+                    crate::primitive_values::STRING
+                }
+                val if val.as_str().parse::<i32>().is_ok() => crate::primitive_values::NUMBER,
+                _ => crate::tokens_type::REFERENCE,
+            };
+
+            Argument {
+                val_type,
+                value: value.clone(),
+            }
+        }
     }
 
     /* VARIABLE DEFINITION */
@@ -200,7 +230,7 @@ pub mod ast_operations {
     pub struct FnCall {
         pub token_type: crate::tokens_type::Val,
         pub fn_name: String,
-        pub arguments: Vec<String>,
+        pub arguments: Vec<Argument>,
     }
 
     impl AstBase for FnCall {
@@ -393,13 +423,16 @@ mod ham {
                             // Ignore itself and the (
                             let starting_token = token_n + 2;
 
-                            let arguments: Vec<String> = get_tokens_from_to(
-                                starting_token,
-                                crate::tokens_type::CLOSE_PARENT,
-                            )
-                            .iter()
-                            .map(|token| token.value.clone())
-                            .collect();
+                            let arguments: Vec<crate::ast_operations::Argument> =
+                                get_tokens_from_to(
+                                    starting_token,
+                                    crate::tokens_type::CLOSE_PARENT,
+                                )
+                                .iter()
+                                .map(|token| {
+                                    crate::ast_operations::Argument::new(token.value.clone())
+                                })
+                                .collect();
 
                             ast_token.arguments = arguments;
                             ast_tree.body.push(Box::new(ast_token));
@@ -422,6 +455,7 @@ mod ham {
     #[derive(Clone, Debug)]
     struct VariableDef {
         name: String,
+        val_type: crate::primitive_values::ValueType,
         value: i32,
     }
 
@@ -437,12 +471,31 @@ mod ham {
         variables: Vec<VariableDef>,
     }
 
+    pub mod heap_errors {
+        pub type HeapErrorVal = i32;
+
+        // Function wasn't found in the current scope
+        pub const FUNCTION_NOT_FOUND: HeapErrorVal = 0;
+
+        // Variable wasn't found in the current scope
+        pub const VARIABLE_NOT_FOUND: HeapErrorVal = 1;
+    }
+
     impl Heap {
         pub fn new() -> Heap {
             Heap {
                 functions: Vec::new(),
                 variables: Vec::new(),
             }
+        }
+        pub fn raise_error(kind: heap_errors::HeapErrorVal, args: Vec<String>) {
+            let msg = match kind {
+                heap_errors::FUNCTION_NOT_FOUND => format!("Function <{}> was not found", args[0]),
+                heap_errors::VARIABLE_NOT_FOUND => format!("Variable <{}> was not found", args[0]),
+                _ => String::from("Unhandled error"),
+            };
+
+            println!("  :: Error :: {}", msg);
         }
     }
 
@@ -451,6 +504,7 @@ mod ham {
 
         let get_var_reference = |var_name: String| -> Result<VariableDef, ()> {
             let heap = heap.lock().unwrap();
+
             for op_var in &heap.variables {
                 if op_var.name == var_name {
                     return Ok(op_var.clone());
@@ -466,7 +520,32 @@ mod ham {
                     return Ok(op_fn.clone());
                 }
             }
+
+            Heap::raise_error(heap_errors::FUNCTION_NOT_FOUND, vec![fn_name.clone()]);
             Err(())
+        };
+
+        let resolve_val = |val_type: crate::primitive_values::ValueType,
+                           value: String|
+         -> Result<String, ()> {
+            let res: String = match val_type {
+                crate::primitive_values::STRING => value,
+                crate::tokens_type::REFERENCE => {
+                    let ref_name = value.clone();
+                    let ref_value = get_var_reference(ref_name.clone());
+
+                    let mut val = String::from("");
+                    if ref_value.is_ok() {
+                        val = ref_value.unwrap().value.to_string()
+                    } else {
+                        Heap::raise_error(heap_errors::VARIABLE_NOT_FOUND, vec![ref_name.clone()])
+                    }
+                    val
+                }
+                _ => String::from(""),
+            };
+
+            Ok(res)
         };
 
         /*
@@ -502,7 +581,8 @@ mod ham {
                     match assignment_type.as_str() {
                         "boolean" => {
                             // WIP
-                            let _state = variable
+
+                            let state = variable
                                 .assignment
                                 .value
                                 .as_self()
@@ -510,9 +590,12 @@ mod ham {
                                 .unwrap()
                                 .get_state();
 
+                            let value = if state { 0 } else { 1 };
+
                             heap.lock().unwrap().variables.push(VariableDef {
                                 name: variable.def_name.clone(),
-                                value: 0,
+                                val_type: crate::primitive_values::BOOLEAN,
+                                value,
                             });
                         }
                         "number" => {
@@ -526,6 +609,7 @@ mod ham {
 
                             heap.lock().unwrap().variables.push(VariableDef {
                                 name: variable.def_name.clone(),
+                                val_type: crate::primitive_values::NUMBER,
                                 value: state,
                             });
                         }
@@ -540,14 +624,15 @@ mod ham {
 
                     let ref_fn = get_fn(fn_call.fn_name.clone());
 
+                    // If the calling function is found
                     if ref_fn.is_ok() {
                         let mut arguments = Vec::new();
 
                         for argument in &fn_call.arguments {
-                            let ref_value = get_var_reference(argument.clone());
+                            let ref_value = resolve_val(argument.val_type, argument.value.clone());
 
                             if ref_value.is_ok() {
-                                arguments.push(ref_value.unwrap().value.to_string());
+                                arguments.push(ref_value.unwrap().to_string());
                             }
                         }
 
@@ -590,7 +675,7 @@ fn main() {
         // Run
         heap = ham::run_ast(ast, heap.clone());
 
-        println!("  <- Ok");
+        println!("  <- ");
 
         println!(">");
     }

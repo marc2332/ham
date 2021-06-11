@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "ham"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "regex",
 ]
