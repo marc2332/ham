@@ -198,7 +198,7 @@ pub mod ast_operations {
     pub struct FnCall {
         pub token_type: crate::tokens_type::Val,
         pub fn_name: String,
-        pub arguments: Vec<String>
+        pub arguments: Vec<String>,
     }
 
     impl AstBase for FnCall {
@@ -219,7 +219,7 @@ pub mod ast_operations {
             FnCall {
                 token_type: crate::tokens_type::FN_CALL,
                 fn_name,
-                arguments: Vec::new()
+                arguments: Vec::new(),
             }
         }
     }
@@ -244,19 +244,18 @@ fn split_keep<'a>(r: &Regex, text: &'a str) -> Vec<&'a str> {
 mod ham {
 
     use crate::ast_operations::ExpressionBase;
-    use crate::ast_operations::VarDefinitionBase;
     use crate::ast_operations::FnCallBase;
+    use crate::ast_operations::VarDefinitionBase;
     use crate::primitive_values::BooleanValueBase;
     use crate::primitive_values::NumberValueBase;
-    use regex::Regex;
     use crate::split_keep;
+    use regex::Regex;
     use std::any::Any;
-    use std::sync::{Arc, Mutex};
     use std::collections::vec_deque::Iter;
+    use std::sync::{Arc, Mutex};
 
     fn get_lines(code: String) -> crate::LinesList {
         let mut lines = Vec::new();
-
 
         // Every line
         for line in code.split("\n") {
@@ -383,35 +382,35 @@ mod ham {
 
                     let reference_type = match next_token {
                         crate::tokens_type::OPEN_PARENT => crate::tokens_type::FN_CALL,
-                        _ => 0
+                        _ => 0,
                     };
 
                     match reference_type {
                         crate::tokens_type::FN_CALL => {
-                            let mut ast_token = crate::ast_operations::FnCall::new(current_token.value.clone());
+                            let mut ast_token =
+                                crate::ast_operations::FnCall::new(current_token.value.clone());
 
                             // Ignore itself and the (
                             let starting_token = token_n + 2;
 
-                            let arguments: Vec<String> = get_tokens_from_to(starting_token, crate::tokens_type::CLOSE_PARENT)
-                                .iter()
-                                .map(|token| {
-                                    token.value.clone()
-                                })
-                                .collect();
+                            let arguments: Vec<String> = get_tokens_from_to(
+                                starting_token,
+                                crate::tokens_type::CLOSE_PARENT,
+                            )
+                            .iter()
+                            .map(|token| token.value.clone())
+                            .collect();
 
                             ast_token.arguments = arguments;
                             ast_tree.body.push(Box::new(ast_token));
                         }
-                        _ => ()
+                        _ => (),
                     }
 
                     token_n += 3;
                 }
                 // References
-                _ => {
-
-                },
+                _ => {}
             }
 
             token_n += 1;
@@ -420,36 +419,34 @@ mod ham {
         return ast_tree;
     }
 
-
     #[derive(Clone)]
     struct VariableDef {
         name: String,
-        value: i32
+        value: i32,
     }
 
     #[derive(Clone)]
     struct FunctionDef {
         name: String,
-        cb: fn(arg: Vec<String>)
+        cb: fn(arg: Vec<String>),
     }
 
     struct Heap {
         functions: Vec<FunctionDef>,
-        variables: Vec<VariableDef>
+        variables: Vec<VariableDef>,
     }
 
     pub fn run_ast(ast: crate::ast_operations::Expression) {
-
         let mut heap = Arc::new(Mutex::new(Heap {
             functions: Vec::new(),
-            variables: Vec::new()
+            variables: Vec::new(),
         }));
 
         let get_var_reference = |var_name: String| -> Result<VariableDef, ()> {
             let heap = heap.lock().unwrap();
             for opVar in &heap.variables {
                 if opVar.name == var_name {
-                    return Ok(opVar.clone())
+                    return Ok(opVar.clone());
                 }
             }
             Err(())
@@ -459,7 +456,7 @@ mod ham {
             let heap = heap.lock().unwrap();
             for opFn in &heap.functions {
                 if opFn.name == fn_name {
-                    return Ok(opFn.clone())
+                    return Ok(opFn.clone());
                 }
             }
             Err(())
@@ -468,16 +465,16 @@ mod ham {
         // Global print function
         heap.lock().unwrap().functions.push(FunctionDef {
             name: String::from("print"),
-            cb: | args| {
+            cb: |args| {
                 println!("{}", args.join(""));
-            }
+            },
         });
 
         for op in &ast.body {
             match op.get_type() {
                 crate::tokens_type::VAR_DEF => {
-
-                    let variable = op.as_self()
+                    let variable = op
+                        .as_self()
                         .downcast_ref::<crate::ast_operations::VarDefinition>()
                         .unwrap();
 
@@ -506,15 +503,13 @@ mod ham {
 
                             heap.lock().unwrap().variables.push(VariableDef {
                                 name: variable.def_name.clone(),
-                                value: state
+                                value: state,
                             });
 
                             format!("{}", state)
                         }
                         &_ => panic!("value not setted"),
                     };
-
-
                 }
                 crate::tokens_type::FN_CALL => {
                     let fn_call = op
@@ -525,7 +520,6 @@ mod ham {
                     let ref_fn = get_fn(fn_call.fn_name.clone());
 
                     if ref_fn.is_ok() {
-
                         let mut arguments = Vec::new();
 
                         for argument in &fn_call.arguments {
@@ -538,10 +532,6 @@ mod ham {
 
                         (ref_fn.unwrap().cb)(arguments);
                     }
-
-
-
-
                 }
                 _ => {
                     println!("IDK")
@@ -552,8 +542,6 @@ mod ham {
 }
 
 fn main() {
-
-
     let code = "
         let okay = 50
         let test = 1
@@ -566,5 +554,4 @@ fn main() {
     let get_ast_tree = ham::get_tokens(String::from(code));
     let ast = ham::get_ast(get_ast_tree);
     ham::run_ast(ast);
-
 }
