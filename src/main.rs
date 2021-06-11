@@ -590,7 +590,7 @@ mod ham {
                                 .unwrap()
                                 .get_state();
 
-                            let value = if state { 0 } else { 1 };
+                            let value = if state { 1 } else { 0 };
 
                             heap.lock().unwrap().variables.push(VariableDef {
                                 name: variable.def_name.clone(),
