@@ -1,4 +1,6 @@
 use regex::Regex;
+use std::io;
+use std::io::BufRead;
 
 type LinesList = Vec<Vec<String>>;
 type TokensList = Vec<Token>;
@@ -250,8 +252,6 @@ mod ham {
     use crate::primitive_values::NumberValueBase;
     use crate::split_keep;
     use regex::Regex;
-    use std::any::Any;
-    use std::collections::vec_deque::Iter;
     use std::sync::{Arc, Mutex};
 
     fn get_lines(code: String) -> crate::LinesList {
@@ -419,34 +419,41 @@ mod ham {
         return ast_tree;
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct VariableDef {
         name: String,
         value: i32,
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct FunctionDef {
         name: String,
         cb: fn(arg: Vec<String>),
     }
 
-    struct Heap {
+    #[derive(Clone)]
+    pub struct Heap {
         functions: Vec<FunctionDef>,
         variables: Vec<VariableDef>,
     }
 
-    pub fn run_ast(ast: crate::ast_operations::Expression) {
-        let mut heap = Arc::new(Mutex::new(Heap {
-            functions: Vec::new(),
-            variables: Vec::new(),
-        }));
+    impl Heap {
+        pub fn new() -> Heap {
+            Heap {
+                functions: Vec::new(),
+                variables: Vec::new(),
+            }
+        }
+    }
+
+    pub fn run_ast(ast: crate::ast_operations::Expression, heap: Heap) -> Heap {
+        let heap = Arc::new(Mutex::new(heap));
 
         let get_var_reference = |var_name: String| -> Result<VariableDef, ()> {
             let heap = heap.lock().unwrap();
-            for opVar in &heap.variables {
-                if opVar.name == var_name {
-                    return Ok(opVar.clone());
+            for op_var in &heap.variables {
+                if op_var.name == var_name {
+                    return Ok(op_var.clone());
                 }
             }
             Err(())
@@ -454,17 +461,29 @@ mod ham {
 
         let get_fn = |fn_name: String| -> Result<FunctionDef, ()> {
             let heap = heap.lock().unwrap();
-            for opFn in &heap.functions {
-                if opFn.name == fn_name {
-                    return Ok(opFn.clone());
+            for op_fn in &heap.functions {
+                if op_fn.name == fn_name {
+                    return Ok(op_fn.clone());
                 }
             }
             Err(())
         };
 
-        // Global print function
+        /*
+         * print() function
+         */
         heap.lock().unwrap().functions.push(FunctionDef {
             name: String::from("print"),
+            cb: |args| {
+                print!("{}", args.join(""));
+            },
+        });
+
+        /*
+         * println() function
+         */
+        heap.lock().unwrap().functions.push(FunctionDef {
+            name: String::from("println"),
             cb: |args| {
                 println!("{}", args.join(""));
             },
@@ -480,9 +499,10 @@ mod ham {
 
                     let assignment_type = variable.assignment.value.get_type();
 
-                    let value = match assignment_type.as_str() {
+                    match assignment_type.as_str() {
                         "boolean" => {
-                            let state = variable
+                            // WIP
+                            let _state = variable
                                 .assignment
                                 .value
                                 .as_self()
@@ -490,7 +510,10 @@ mod ham {
                                 .unwrap()
                                 .get_state();
 
-                            format!("{}", state)
+                            heap.lock().unwrap().variables.push(VariableDef {
+                                name: variable.def_name.clone(),
+                                value: 0,
+                            });
                         }
                         "number" => {
                             let state = variable
@@ -505,8 +528,6 @@ mod ham {
                                 name: variable.def_name.clone(),
                                 value: state,
                             });
-
-                            format!("{}", state)
                         }
                         &_ => panic!("value not setted"),
                     };
@@ -538,20 +559,39 @@ mod ham {
                 }
             }
         }
+
+        let heap = heap.lock().unwrap();
+
+        return heap.clone();
     }
 }
 
+static CLI_MSG: &str = ":: Welcome to HAM REPL :: \n";
+
 fn main() {
-    let code = "
-        let okay = 50
-        let test = 1
-        print(test)
-        print(okay)
-    ";
+    println!("{}", CLI_MSG);
 
-    println!("` \n {} \n`", code);
+    // Memory heap
+    let mut heap = ham::Heap::new();
 
-    let get_ast_tree = ham::get_tokens(String::from(code));
-    let ast = ham::get_ast(get_ast_tree);
-    ham::run_ast(ast);
+    let stdin = io::stdin();
+
+    println!(">");
+    for line in stdin.lock().lines() {
+        // Code
+        let line = String::from(line.unwrap());
+
+        // Tokens
+        let tokens = ham::get_tokens(line);
+
+        // Tree
+        let ast = ham::get_ast(tokens);
+
+        // Run
+        heap = ham::run_ast(ast, heap.clone());
+
+        println!("  <- Ok");
+
+        println!(">");
+    }
 }
