@@ -6,3 +6,4 @@ authors = ["Marc Espín"]
 
 [dependencies]
 regex = { version = "1",  features = ["pattern"] }
+dyn-clone = "1.0.4"
