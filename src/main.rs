@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::io;
 use std::io::BufRead;
 use std::sync::Mutex;
@@ -233,7 +232,7 @@ pub mod ast_operations {
     }
 
     /* VARIABLE ASSIGNMENT */
-    pub trait VarAssignmentnBase {
+    pub trait VarAssignmentBase {
         fn get_def_name(&self) -> String;
         fn new(var_name: String, assignment: Assignment) -> Self;
     }
@@ -243,7 +242,7 @@ pub mod ast_operations {
         pub assignment: Assignment,
     }
 
-    impl VarAssignmentnBase for VarAssignment {
+    impl VarAssignmentBase for VarAssignment {
         fn get_def_name(&self) -> String {
             return self.var_name.clone();
         }
@@ -341,33 +340,33 @@ pub mod ast_operations {
     }
 }
 
-fn split_keep<'a>(r: &Regex, text: &'a str) -> Vec<&'a str> {
-    let mut result = Vec::new();
-    let mut last = 0;
-    for (index, matched) in text.match_indices(r) {
-        if last != index {
-            result.push(&text[last..index]);
-        }
-        result.push(matched);
-        last = index + matched.len();
-    }
-    if last < text.len() {
-        result.push(&text[last..]);
-    }
-    result
-}
-
 mod ham {
 
     use crate::ast_operations::FnCallBase;
     use crate::ast_operations::VarDefinitionBase;
-    use crate::ast_operations::{Assignment, ExpressionBase, VarAssignmentnBase};
+    use crate::ast_operations::{Assignment, ExpressionBase, VarAssignmentBase};
     use crate::primitive_values::NumberValueBase;
     use crate::primitive_values::{BooleanValueBase, ReferenceValueBase, StringValueBase};
-    use crate::split_keep;
     use regex::Regex;
     use std::any::Any;
     use std::sync::{Arc, Mutex};
+
+    fn split<'a>(r: &'a Regex, text: &'a str) -> Vec<&'a str> {
+        let mut result = Vec::new();
+        let mut last = 0;
+        for (index, matched) in text.match_indices(r) {
+            if last != index {
+                result.push(&text[last..index]);
+            }
+            result.push(matched);
+
+            last = index + matched.len();
+        }
+        if last < text.len() {
+            result.push(&text[last..]);
+        }
+        result
+    }
 
     fn get_lines(code: String) -> crate::LinesList {
         let mut lines = Vec::new();
@@ -380,7 +379,7 @@ mod ham {
             let re = Regex::new(r"[\s+,:]|([()])").unwrap();
 
             // Every detected word
-            for word in split_keep(&re, &line) {
+            for word in split(&re, &line) {
                 // Prevent empty words
                 if word.trim() != "" {
                     line_ast.push(String::from(word.trim()));
