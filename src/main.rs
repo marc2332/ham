@@ -3,39 +3,33 @@ mod ham;
 mod tokenizer;
 mod utils;
 
+use crate::ast::ast_operations::ExpressionBase;
+use clap::{App, Arg, ArgMatches, SubCommand};
+use std::fs;
 use std::io;
 use std::io::BufRead;
 use std::sync::Mutex;
-use clap::{Arg, App, SubCommand, ArgMatches};
-use std::fs;
-use crate::ast::ast_operations::ExpressionBase;
 
 static CLI_MSG: &str = ":: Welcome to HAM REPL :: \n";
-
 
 fn commands<'a>() -> ArgMatches<'a> {
     App::new("HAM Interpreter")
         .version("1.0")
         .author("Marc E. <mespinsanz@gmail.com>")
         .subcommand(SubCommand::with_name("repl"))
-        .subcommand(
-            SubCommand::with_name("run")
-                .arg(Arg::with_name("file"))
-        )
+        .subcommand(SubCommand::with_name("run").arg(Arg::with_name("file")))
         .get_matches()
 }
 
 fn main() {
-
     let matches = commands();
 
-    match matches.subcommand_name(){
+    match matches.subcommand_name() {
         Some("run") => {
-
             let filename = matches.subcommand().1.unwrap().value_of("file").unwrap();
 
-            let contents = fs::read_to_string(filename)
-                .expect("Something went wrong reading the file");
+            let contents =
+                fs::read_to_string(filename).expect("Something went wrong reading the file");
 
             // Memory stack
             let stack = Mutex::new(ham::Stack::new());
@@ -53,7 +47,6 @@ fn main() {
             ham::run_ast(&tree, &stack);
         }
         Some("repl") => {
-
             println!("{}", CLI_MSG);
 
             // Memory stack

@@ -4,7 +4,6 @@ pub mod ast_operations {
     use crate::utils::{op_codes, primitive_values};
     use std::any::Any;
 
-
     pub trait AstBase: dyn_clone::DynClone {
         fn get_type(&self) -> op_codes::Val;
         fn as_self(&self) -> &dyn Any;
@@ -49,7 +48,7 @@ pub mod ast_operations {
     #[derive(Clone)]
     pub struct FnDefinition {
         pub def_name: String,
-        pub body: Vec<Box<dyn self::AstBase>>
+        pub body: Vec<Box<dyn self::AstBase>>,
     }
 
     impl FnDefinitionBase for FnDefinition {
@@ -57,10 +56,7 @@ pub mod ast_operations {
             return self.def_name.clone();
         }
         fn new(def_name: String, body: Vec<Box<dyn self::AstBase>>) -> FnDefinition {
-            FnDefinition {
-                def_name,
-                body
-            }
+            FnDefinition { def_name, body }
         }
     }
 
