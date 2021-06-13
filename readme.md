@@ -1,4 +1,12 @@
-ham, a programming language (WIP)
+🧪 ham, a programming language made in rust 
+
+status: **alpha**
+
+### Goals
+- Speed
+- Security
+
+### Usage
 
 Built-in repl:
 ```shell
