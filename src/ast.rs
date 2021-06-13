@@ -3,6 +3,7 @@ pub mod ast_operations {
     /* BASE */
     use crate::utils::{op_codes, primitive_values};
     use std::any::Any;
+    use uuid::Uuid;
 
     pub trait AstBase: dyn_clone::DynClone {
         fn get_type(&self) -> op_codes::Val;
@@ -158,6 +159,7 @@ pub mod ast_operations {
     pub struct Expression {
         pub body: Vec<Box<dyn self::AstBase>>,
         pub token_type: op_codes::Val,
+        pub expr_id: String,
     }
 
     impl AstBase for Expression {
@@ -179,12 +181,14 @@ pub mod ast_operations {
             Expression {
                 token_type: op_codes::EXPRESSION,
                 body: Vec::new(),
+                expr_id: Uuid::new_v4().to_string(),
             }
         }
         fn from_body(body: Vec<Box<dyn self::AstBase>>) -> Expression {
             Expression {
                 token_type: op_codes::EXPRESSION,
                 body,
+                expr_id: Uuid::new_v4().to_string(),
             }
         }
     }

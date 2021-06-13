@@ -1,25 +1,24 @@
 
-
-fn test() {
-    println(1)
-}
+let val = true
+let val2 = false
+let val3 = "nice"
 
 fn anything(){
-    let A = 4
+    fn o(){
+        ah()
+        print(val2)
+    }
 
-    test()
+    fn ah(){
+        print(val)
+    }
 
-    println(2)
+    o()
+
+    print(val3)
+
 }
 
-println(0)
-
 anything()
-
-println(3)
-
-let helloWorld = "HelloWorld"
-
-print(helloWorld)
 
 

@@ -8,3 +8,4 @@ authors = ["Marc Espín"]
 regex = { version = "1",  features = ["pattern"] }
 dyn-clone = "1.0.4"
 clap = "2.33.3"
+uuid = { version = "0.8", features = ["v4"] }

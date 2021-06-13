@@ -87,9 +87,10 @@ pub fn get_tokens(code: String) -> TokensList {
     return self::transform_into_tokens(lines);
 }
 
-pub fn get_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>) {
+pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>) {
     let mut ast_tree = ast_tree.lock().unwrap();
 
+    // Get tokens with index starting on `from` until a token matches its type to `to`
     let get_tokens_from_to = |from: usize, to: op_codes::Val| -> TokensList {
         let mut found_tokens = Vec::new();
 
@@ -100,6 +101,34 @@ pub fn get_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>)
                 break;
             } else {
                 found_tokens.push(tokens[tok_n].clone())
+            }
+            tok_n += 1;
+        }
+
+        found_tokens
+    };
+
+    // Get all the tokens inside a expression block
+    let get_expr_tokens = |from: usize| -> TokensList {
+        let mut found_tokens = Vec::new();
+
+        let mut block_counter = 0;
+
+        let mut tok_n = from;
+
+        while tok_n < tokens.len() {
+            let token = tokens[tok_n].clone();
+
+            if token.ast_type == op_codes::OPEN_BLOCK {
+                block_counter += 1;
+            } else if token.ast_type == op_codes::CLOSE_BLOCK {
+                block_counter -= 1;
+            }
+
+            if block_counter == 0 {
+                break;
+            } else if tok_n > from {
+                found_tokens.push(token.clone());
             }
             tok_n += 1;
         }
@@ -145,7 +174,6 @@ pub fn get_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>)
 
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
-
         match current_token.ast_type {
             // Function definition
             op_codes::FN_DEF => {
@@ -153,14 +181,31 @@ pub fn get_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>)
 
                 // Scope tree
                 let scope_tree = Mutex::new(ast_operations::Expression::new());
-                let block_tokens = get_tokens_from_to(token_n + 2, op_codes::CLOSE_BLOCK);
 
-                get_ast(block_tokens.clone(), &scope_tree);
+                // Ignore function name and the (
+                let starting_token = token_n + 2;
 
+                // Get function arguments, WIP
+                let arguments: Vec<ast_operations::Argument> =
+                    get_tokens_from_to(starting_token, op_codes::CLOSE_PARENT)
+                        .iter()
+                        .map(|token| ast_operations::Argument::new(token.value.clone()))
+                        .collect();
+
+                // Ignore function name, (, arguments and )
+                let open_block_index = starting_token + arguments.len() + 1;
+
+                // Get all tokens inside the function block
+                let block_tokens = get_expr_tokens(open_block_index);
+
+                // Move the tokens into the tree
+                move_tokens_into_ast(block_tokens.clone(), &scope_tree);
+
+                // Ignore the function body
+                token_n = block_tokens.len() + open_block_index + 1;
+
+                // Create a function definition
                 let body = &scope_tree.lock().unwrap().body.clone();
-
-                token_n += block_tokens.len();
-
                 let ast_token = ast_operations::FnDefinition::new(def_name, body.to_vec());
                 ast_tree.body.push(Box::new(ast_token));
             }
@@ -237,6 +282,7 @@ struct VariableDef {
     name: String,
     val_type: op_codes::Val,
     value: Box<dyn primitive_values::PrimitiveValueBase>,
+    expr_id: String,
 }
 
 #[derive(Clone)]
@@ -244,6 +290,7 @@ struct FunctionDef {
     name: String,
     body: Vec<Box<dyn AstBase>>,
     cb: fn(arg: Vec<String>, body: Vec<Box<dyn AstBase>>, stack: &Mutex<Stack>),
+    expr_id: String,
 }
 
 #[derive(Clone)]
@@ -257,6 +304,13 @@ impl Stack {
         Stack {
             functions: Vec::new(),
             variables: Vec::new(),
+        }
+    }
+    pub fn drop_ops_from_id(&mut self, id: String) {
+        for (index, op_var) in self.variables.clone().iter().enumerate() {
+            if op_var.expr_id == id {
+                self.variables.remove(index);
+            }
         }
     }
 }
@@ -338,6 +392,10 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
         val.downcast_ref::<T>().unwrap()
     }
 
+    /*
+     * For static values it will just return the input but for references it will resolve its value
+     * and then return it
+     */
     let resolve_def = |val_type: op_codes::Val,
                        ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
      -> (op_codes::Val, Box<dyn primitive_values::PrimitiveValueBase>) {
@@ -386,6 +444,7 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
         cb: |args, _, _| {
             print!("{}", args.join(""));
         },
+        expr_id: ast.expr_id.clone(),
     });
 
     /*
@@ -397,6 +456,7 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
         cb: |args, _, _| {
             println!("{}", args.join(""));
         },
+        expr_id: ast.expr_id.clone(),
     });
 
     for op in &ast.body {
@@ -409,8 +469,13 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
                     body: function.body.clone(),
                     cb: |_, body: Vec<Box<dyn self::AstBase>>, stack| {
                         let expr = ast_operations::Expression::from_body(body.clone());
+                        let expr_id = expr.expr_id.clone();
+
                         run_ast(&Mutex::new(expr), stack);
+
+                        stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
                     },
+                    expr_id: ast.expr_id.clone(),
                 });
             }
 
@@ -438,6 +503,7 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
                         name: variable.def_name.clone(),
                         val_type: ref_type,
                         value: ref_val,
+                        expr_id: ast.expr_id.clone(),
                     });
                 }
             }
@@ -456,7 +522,6 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
              */
             op_codes::FN_CALL => {
                 let fn_call = downcast_val::<ast_operations::FnCall>(op.as_self());
-
                 let ref_fn = get_fn(fn_call.fn_name.clone());
 
                 // If the calling function is found

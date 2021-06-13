@@ -189,6 +189,6 @@ pub mod errors {
             _ => String::from("Unhandled error"),
         };
 
-        println!("  :: Error :: {}", msg);
+        println!(" \n :: Error :: {}", msg);
     }
 }

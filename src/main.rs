@@ -41,7 +41,7 @@ fn main() {
             let tree = Mutex::new(ast::ast_operations::Expression::new());
 
             // Tree
-            ham::get_ast(tokens, &tree);
+            ham::move_tokens_into_ast(tokens, &tree);
 
             // Run
             ham::run_ast(&tree, &stack);
@@ -66,7 +66,7 @@ fn main() {
                 let tree = Mutex::new(ast::ast_operations::Expression::new());
 
                 // Tree
-                ham::get_ast(tokens, &tree);
+                ham::move_tokens_into_ast(tokens, &tree);
 
                 // Run
                 ham::run_ast(&tree, &stack);

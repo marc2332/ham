@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Token {
     pub ast_type: i32,
     pub value: String,
