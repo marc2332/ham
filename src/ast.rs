@@ -30,6 +30,7 @@ pub mod ast_operations {
                 }
                 // Is Number
                 val if val.as_str().parse::<i32>().is_ok() => op_codes::NUMBER,
+                // Is Reference
                 _ => op_codes::REFERENCE,
             };
 
@@ -37,6 +38,67 @@ pub mod ast_operations {
                 val_type,
                 value: value.clone(),
             }
+        }
+    }
+
+
+    /* RESULT EXPRESSION */
+    pub trait ResultExpressionBase {
+        fn new(relation: op_codes::Val, left: Argument, right: Argument) -> Self;
+    }
+
+    #[derive(Clone)]
+    pub struct ResultExpression {
+        pub left: Argument,
+        pub relation: op_codes::Val,
+        pub right: Argument
+    }
+
+    impl ResultExpressionBase for ResultExpression {
+        fn new(relation: op_codes::Val, left: Argument, right: Argument) -> ResultExpression {
+            ResultExpression {
+                left,
+                relation,
+                right
+            }
+        }
+    }
+
+    impl AstBase for ResultExpression {
+        fn get_type(&self) -> i32 {
+            op_codes::RES_EXPRESSION
+        }
+        fn as_self(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    /* IF STATEMENT */
+    pub trait IfConditionalBase {
+        fn new(conditions: Vec<ResultExpression>, body: Vec<Box<dyn self::AstBase>>) -> Self;
+    }
+
+    #[derive(Clone)]
+    pub struct IfConditional {
+        pub conditions: Vec<ResultExpression>,
+        pub body: Vec<Box<dyn self::AstBase>>,
+    }
+
+    impl IfConditionalBase for IfConditional {
+        fn new(conditions: Vec<ResultExpression>, body: Vec<Box<dyn self::AstBase>>) -> IfConditional {
+            IfConditional {
+                conditions,
+                body
+            }
+        }
+    }
+
+    impl AstBase for IfConditional {
+        fn get_type(&self) -> i32 {
+            op_codes::IF_CONDITIONAL
+        }
+        fn as_self(&self) -> &dyn Any {
+            self
         }
     }
 
@@ -73,20 +135,20 @@ pub mod ast_operations {
     /* VARIABLE DEFINITION */
     pub trait VarDefinitionBase {
         fn get_def_name(&self) -> String;
-        fn new(def_name: String, assignment: Assignment) -> Self;
+        fn new(def_name: String, assignment: BoxedValue) -> Self;
     }
 
     #[derive(Clone)]
     pub struct VarDefinition {
         pub def_name: String,
-        pub assignment: Assignment,
+        pub assignment: BoxedValue,
     }
 
     impl VarDefinitionBase for VarDefinition {
         fn get_def_name(&self) -> String {
             return self.def_name.clone();
         }
-        fn new(def_name: String, assignment: Assignment) -> VarDefinition {
+        fn new(def_name: String, assignment: BoxedValue) -> VarDefinition {
             VarDefinition {
                 def_name,
                 assignment,
@@ -106,20 +168,20 @@ pub mod ast_operations {
     /* VARIABLE ASSIGNMENT */
     pub trait VarAssignmentBase {
         fn get_def_name(&self) -> String;
-        fn new(var_name: String, assignment: Assignment) -> Self;
+        fn new(var_name: String, assignment: BoxedValue) -> Self;
     }
 
     #[derive(Clone)]
     pub struct VarAssignment {
         pub var_name: String,
-        pub assignment: Assignment,
+        pub assignment: BoxedValue,
     }
 
     impl VarAssignmentBase for VarAssignment {
         fn get_def_name(&self) -> String {
             return self.var_name.clone();
         }
-        fn new(var_name: String, assignment: Assignment) -> VarAssignment {
+        fn new(var_name: String, assignment: BoxedValue) -> VarAssignment {
             VarAssignment {
                 var_name,
                 assignment,
@@ -136,15 +198,15 @@ pub mod ast_operations {
         }
     }
 
-    /* ASSIGNMENT */
+    /* BOXED VALUE */
 
     #[derive(Clone)]
-    pub struct Assignment {
+    pub struct BoxedValue {
         pub interface: op_codes::Val,
         pub value: Box<dyn primitive_values::PrimitiveValueBase>,
     }
 
-    impl AstBase for Assignment {
+    impl AstBase for BoxedValue {
         fn get_type(&self) -> i32 {
             op_codes::LEFT_ASSIGN
         }

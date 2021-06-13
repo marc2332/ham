@@ -19,9 +19,12 @@ pub mod op_codes {
     pub const FN_DEF: Val = 11;
     pub const OPEN_BLOCK: Val = 12;
     pub const CLOSE_BLOCK: Val = 13;
+    pub const IF_CONDITIONAL: Val = 14;
+    pub const RES_EXPRESSION: Val = 15;
+    pub const EQUAL_CONDITION: Val = 16; // ==
 
     // This must be equal to the latest code
-    const CODES_RANGE: Val = 13;
+    const CODES_RANGE: Val = 16;
 
     // If the code is lower than 0 or greater than the defined range above it becomes invalid
     pub fn is_valid(op_code: Val) -> bool {

@@ -1,7 +1,5 @@
 use crate::ast::ast_operations;
-use crate::ast::ast_operations::{
-    AstBase, ExpressionBase, FnCallBase, FnDefinitionBase, VarAssignmentBase, VarDefinitionBase,
-};
+use crate::ast::ast_operations::{AstBase, ExpressionBase, FnCallBase, FnDefinitionBase, VarAssignmentBase, VarDefinitionBase, ResultExpressionBase, IfConditionalBase};
 use crate::tokenizer::{LinesList, Token, TokensList};
 use crate::utils::primitive_values::{
     BooleanValueBase, NumberValueBase, ReferenceValueBase, StringValueBase,
@@ -67,6 +65,8 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "fn" => op_codes::FN_DEF,
                 "{" => op_codes::OPEN_BLOCK,
                 "}" => op_codes::CLOSE_BLOCK,
+                "if" => op_codes::IF_CONDITIONAL,
+                "==" => op_codes::EQUAL_CONDITION,
                 _ => op_codes::REFERENCE,
             };
 
@@ -138,20 +138,20 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
 
     let mut token_n = 0;
 
-    fn get_assignment_token(val: String) -> ast_operations::Assignment {
+    fn get_assignment_token(val: String) -> ast_operations::BoxedValue {
         match val.as_str() {
             // True boolean
-            "true" => ast_operations::Assignment {
+            "true" => ast_operations::BoxedValue {
                 interface: op_codes::BOOLEAN,
                 value: Box::new(primitive_values::Boolean::new(true)),
             },
             // False boolean
-            "false" => ast_operations::Assignment {
+            "false" => ast_operations::BoxedValue {
                 interface: op_codes::BOOLEAN,
                 value: Box::new(primitive_values::Boolean::new(false)),
             },
             // Numeric values
-            val if val.parse::<i32>().is_ok() => ast_operations::Assignment {
+            val if val.parse::<i32>().is_ok() => ast_operations::BoxedValue {
                 interface: op_codes::NUMBER,
                 value: Box::new(primitive_values::Number::new(val.parse::<i32>().unwrap())),
             },
@@ -159,22 +159,84 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
             val if val.chars().nth(0).unwrap() == '"'
                 && val.chars().nth(val.len() - 1).unwrap() == '"' =>
             {
-                ast_operations::Assignment {
+                ast_operations::BoxedValue {
                     interface: op_codes::STRING,
                     value: Box::new(primitive_values::StringVal::new(String::from(val))),
                 }
             }
             // References to other values (ej: referencing to a variable)
-            val => ast_operations::Assignment {
+            val => ast_operations::BoxedValue {
                 interface: op_codes::REFERENCE,
                 value: Box::new(primitive_values::Reference::new(String::from(val))),
             },
         }
     }
 
+    fn convert_tokens_into_res_expressions(tokens: TokensList) -> Vec<ast_operations::ResultExpression>{
+        let mut exprs = Vec::new();
+
+        let left_token = tokens[0].clone();
+
+        let mut tok_n = 1;
+
+        while tok_n < tokens.len() {
+            let token = tokens[tok_n].clone();
+
+            match token.ast_type {
+                op_codes::EQUAL_CONDITION => {
+                    let right_token = tokens[tok_n+1].clone();
+
+                    exprs.push(ast_operations::ResultExpression::new(
+                        op_codes::EQUAL_CONDITION,
+                        ast_operations::Argument::new(left_token.value.clone()),
+                        ast_operations::Argument::new(right_token.value.clone())
+                    ));
+
+                    tok_n += 1;
+                }
+                _ => panic!("UNHANDLED CONDITION")
+            }
+
+            tok_n += 1;
+        }
+
+        exprs
+    }
+
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
         match current_token.ast_type {
+            // If statement
+            op_codes::IF_CONDITIONAL => {
+
+                // Get the if condition tokens
+                let condition_tokens =  get_tokens_from_to(token_n+1, op_codes::OPEN_BLOCK);
+
+                // Transform those tokens into result expressions
+                let exprs = convert_tokens_into_res_expressions(condition_tokens.clone());
+
+                // Scope tree
+                let scope_tree = Mutex::new(ast_operations::Expression::new());
+
+                // Ignore the if conditions and {
+                let open_block_index = token_n + condition_tokens.len() + 1;
+
+                // Get all tokens inside the if block
+                let block_tokens = get_expr_tokens(open_block_index);
+
+                // Move the tokens into the tree
+                move_tokens_into_ast(block_tokens.clone(), &scope_tree);
+
+                // Ignore the function body
+                token_n = block_tokens.len() + open_block_index + 1;
+
+                // Create a function definition
+                let body = &scope_tree.lock().unwrap().body.clone();
+                let ast_token = ast_operations::IfConditional::new(exprs.clone(), body.to_vec());
+                ast_tree.body.push(Box::new(ast_token));
+
+            }
+
             // Function definition
             op_codes::FN_DEF => {
                 let def_name = String::from(&tokens[token_n + 1].value.clone());
@@ -435,6 +497,31 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
         errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
     };
 
+    let eval_condition = |condition_code: op_codes::Val, left_val: ast_operations::Argument, right_val: ast_operations::Argument| -> bool {
+        let left_val = resolve_val(left_val.val_type.clone(), left_val.value.clone());
+        let right_val = resolve_val(right_val.val_type.clone(), right_val.value.clone());
+
+        if left_val.is_ok() && right_val.is_ok() {
+            match condition_code  {
+                op_codes::EQUAL_CONDITION => {
+
+                    let left_val = left_val.unwrap();
+                    let right_val = right_val.unwrap();
+
+                    if left_val == right_val {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false
+            }
+
+        } else {
+            false
+        }
+    };
+
     /*
      * print() function
      */
@@ -461,6 +548,32 @@ pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
 
     for op in &ast.body {
         match op.get_type() {
+
+            op_codes::IF_CONDITIONAL => {
+
+                let if_statement = downcast_val::<ast_operations::IfConditional>(op.as_self());
+
+                let mut true_count = 0;
+
+                for condition in if_statement.conditions.clone() {
+
+                    let res = eval_condition(condition.relation, condition.left, condition.right);
+
+                    if res == true {
+                        true_count += 1;
+                    }
+                }
+                if true_count == if_statement.conditions.len() {
+                    let expr = ast_operations::Expression::from_body(if_statement.body.clone());
+                    let expr_id = expr.expr_id.clone();
+
+                    run_ast(&Mutex::new(expr), stack);
+
+                    stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
+                }
+
+            }
+
             op_codes::FN_DEF => {
                 let function = downcast_val::<ast_operations::FnDefinition>(op.as_self());
 
