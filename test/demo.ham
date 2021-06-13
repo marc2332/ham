@@ -1,0 +1,25 @@
+
+
+fn test() {
+    println(1)
+}
+
+fn anything(){
+    let A = 4
+
+    test()
+
+    println(2)
+}
+
+println(0)
+
+anything()
+
+println(3)
+
+let helloWorld = "HelloWorld"
+
+print(helloWorld)
+
+

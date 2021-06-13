@@ -1,7 +1,5 @@
 use crate::ast::ast_operations;
-use crate::ast::ast_operations::{
-    ExpressionBase, FnCallBase, VarAssignmentBase, VarDefinitionBase,
-};
+use crate::ast::ast_operations::{ExpressionBase, FnCallBase, VarAssignmentBase, VarDefinitionBase, FnDefinitionBase, AstBase};
 use crate::tokenizer::{LinesList, Token, TokensList};
 use crate::utils::primitive_values::{
     BooleanValueBase, NumberValueBase, ReferenceValueBase, StringValueBase,
@@ -10,7 +8,7 @@ use crate::utils::{errors, op_codes, primitive_values};
 
 use regex::Regex;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 fn split<'a>(r: &'a Regex, text: &'a str) -> Vec<&'a str> {
     let mut result = Vec::new();
@@ -64,6 +62,9 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "=" => op_codes::LEFT_ASSIGN,
                 "(" => op_codes::OPEN_PARENT,
                 ")" => op_codes::CLOSE_PARENT,
+                "fn" => op_codes::FN_DEF,
+                "{" => op_codes::OPEN_BLOCK,
+                "}" => op_codes::CLOSE_BLOCK,
                 _ => op_codes::REFERENCE,
             };
 
@@ -84,8 +85,8 @@ pub fn get_tokens(code: String) -> TokensList {
     return self::transform_into_tokens(lines);
 }
 
-pub fn get_ast(tokens: TokensList) -> ast_operations::Expression {
-    let mut ast_tree = ast_operations::Expression::new();
+pub fn get_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>){
+    let mut ast_tree = ast_tree.lock().unwrap();
 
     let get_tokens_from_to = |from: usize, to: op_codes::Val| -> TokensList {
         let mut found_tokens = Vec::new();
@@ -132,6 +133,7 @@ pub fn get_ast(tokens: TokensList) -> ast_operations::Expression {
                     value: Box::new(primitive_values::StringVal::new(String::from(val))),
                 }
             }
+            // References to other values (ej: referencing to a variable)
             val => ast_operations::Assignment {
                 interface: op_codes::REFERENCE,
                 value: Box::new(primitive_values::Reference::new(String::from(val))),
@@ -143,6 +145,25 @@ pub fn get_ast(tokens: TokensList) -> ast_operations::Expression {
         let current_token = &tokens[token_n];
 
         match current_token.ast_type {
+            // Function definition
+            op_codes::FN_DEF => {
+                let def_name = String::from(&tokens[token_n + 1].value.clone());
+
+                // Scope tree
+                let scope_tree = Mutex::new(ast_operations::Expression::new());
+                let block_tokens = get_tokens_from_to(token_n+2, op_codes::CLOSE_BLOCK);
+
+                get_ast(block_tokens.clone(), &scope_tree);
+
+                let body = &scope_tree.lock().unwrap().body.clone();
+
+                token_n += block_tokens.len();
+
+                let ast_token = ast_operations::FnDefinition::new(def_name, body.to_vec());
+                ast_tree.body.push(Box::new(ast_token));
+
+            }
+            // Variable definition
             op_codes::VAR_DEF => {
                 let def_name = String::from(&tokens[token_n + 1].value.clone());
                 let def_value = String::from(&tokens[token_n + 3].value.clone());
@@ -152,8 +173,9 @@ pub fn get_ast(tokens: TokensList) -> ast_operations::Expression {
                 let ast_token = ast_operations::VarDefinition::new(def_name, assignment);
                 ast_tree.body.push(Box::new(ast_token));
 
-                token_n += 3;
+                token_n += 4;
             }
+            // References (fn calls, variable reassignation...)
             op_codes::REFERENCE => {
                 let next_token = tokens[token_n + 1].ast_type;
 
@@ -175,6 +197,8 @@ pub fn get_ast(tokens: TokensList) -> ast_operations::Expression {
                         );
 
                         ast_tree.body.push(Box::new(ast_token));
+
+                        token_n += 3;
                     }
                     op_codes::FN_CALL => {
                         let mut ast_token =
@@ -189,22 +213,25 @@ pub fn get_ast(tokens: TokensList) -> ast_operations::Expression {
                                 .map(|token| ast_operations::Argument::new(token.value.clone()))
                                 .collect();
 
+                        token_n += 3 + arguments.len() ;
+
                         ast_token.arguments = arguments;
                         ast_tree.body.push(Box::new(ast_token));
+
                     }
-                    _ => (),
+                    _ => {
+                        token_n += 1;
+                        ()
+                    },
                 }
 
-                token_n += 3;
             }
-            // References
-            _ => {}
+            _ => {
+                token_n += 1;
+            }
         }
 
-        token_n += 1;
     }
-
-    return ast_tree;
 }
 
 #[derive(Clone)]
@@ -217,7 +244,8 @@ struct VariableDef {
 #[derive(Clone)]
 struct FunctionDef {
     name: String,
-    cb: fn(arg: Vec<String>),
+    body: Vec<Box<dyn AstBase>>,
+    cb: fn(arg: Vec<String>, body: Vec<Box<dyn AstBase>>, stack: &Mutex<Stack>),
 }
 
 #[derive(Clone)]
@@ -235,8 +263,9 @@ impl Stack {
     }
 }
 
-pub fn run_ast(ast: ast_operations::Expression, stack: &Mutex<Stack>) {
-    let stack = Arc::new(stack);
+pub fn run_ast(ast: &Mutex<ast_operations::Expression>, stack: &Mutex<Stack>) {
+
+    let ast = ast.lock().unwrap();
 
     // Search variables in the stack by its name
     let get_var_reference = |var_name: String| -> Result<VariableDef, ()> {
@@ -356,7 +385,8 @@ pub fn run_ast(ast: ast_operations::Expression, stack: &Mutex<Stack>) {
      */
     stack.lock().unwrap().functions.push(FunctionDef {
         name: String::from("print"),
-        cb: |args| {
+        body: vec![],
+        cb: |args, _, _| {
             print!("{}", args.join(""));
         },
     });
@@ -366,13 +396,30 @@ pub fn run_ast(ast: ast_operations::Expression, stack: &Mutex<Stack>) {
      */
     stack.lock().unwrap().functions.push(FunctionDef {
         name: String::from("println"),
-        cb: |args| {
+        body: vec![],
+        cb: |args, _, _| {
             println!("{}", args.join(""));
         },
     });
 
     for op in &ast.body {
         match op.get_type() {
+
+            op_codes::FN_DEF => {
+
+                let function = downcast_val::<ast_operations::FnDefinition>(op.as_self());
+
+                stack.lock().unwrap().functions.push(FunctionDef {
+                    name: String::from(function.def_name.clone()),
+                    body: function.body.clone(),
+                    cb:  |_, body: Vec<Box<dyn self::AstBase>>, stack | {
+                        let expr = ast_operations::Expression::from_body(body.clone());
+                        run_ast(&Mutex::new(expr), stack);
+                    }
+                });
+
+            }
+
             /*
              * Handle variables definitions
              */
@@ -430,7 +477,9 @@ pub fn run_ast(ast: ast_operations::Expression, stack: &Mutex<Stack>) {
                         }
                     }
 
-                    (ref_fn.unwrap().cb)(arguments);
+                    let func = ref_fn.unwrap();
+
+                    (func.cb)(arguments, func.body, &stack);
                 }
             }
             _ => {

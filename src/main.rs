@@ -6,33 +6,83 @@ mod utils;
 use std::io;
 use std::io::BufRead;
 use std::sync::Mutex;
+use clap::{Arg, App, SubCommand, ArgMatches};
+use std::fs;
+use crate::ast::ast_operations::ExpressionBase;
 
 static CLI_MSG: &str = ":: Welcome to HAM REPL :: \n";
 
+
+fn commands<'a>() -> ArgMatches<'a> {
+    App::new("HAM Interpreter")
+        .version("1.0")
+        .author("Marc E. <mespinsanz@gmail.com>")
+        .subcommand(SubCommand::with_name("repl"))
+        .subcommand(
+            SubCommand::with_name("run")
+                .arg(Arg::with_name("file"))
+        )
+        .get_matches()
+}
+
 fn main() {
-    println!("{}", CLI_MSG);
 
-    // Memory stack
-    let stack = Mutex::new(ham::Stack::new());
+    let matches = commands();
 
-    let stdin = io::stdin();
+    match matches.subcommand_name(){
+        Some("run") => {
 
-    println!(">");
-    for line in stdin.lock().lines() {
-        // Code
-        let line = String::from(line.unwrap());
+            let filename = matches.subcommand().1.unwrap().value_of("file").unwrap();
 
-        // Tokens
-        let tokens = ham::get_tokens(line);
+            let contents = fs::read_to_string(filename)
+                .expect("Something went wrong reading the file");
 
-        // Tree
-        let ast = ham::get_ast(tokens);
+            // Memory stack
+            let stack = Mutex::new(ham::Stack::new());
 
-        // Run
-        ham::run_ast(ast, &stack);
+            // Tokens
+            let tokens = ham::get_tokens(contents);
 
-        println!("  <- ");
+            // Ast tree root
+            let tree = Mutex::new(ast::ast_operations::Expression::new());
 
-        println!(">");
+            // Tree
+            ham::get_ast(tokens, &tree);
+
+            // Run
+            ham::run_ast(&tree, &stack);
+        }
+        Some("repl") => {
+
+            println!("{}", CLI_MSG);
+
+            // Memory stack
+            let stack = Mutex::new(ham::Stack::new());
+
+            let stdin = io::stdin();
+
+            println!(">");
+            for line in stdin.lock().lines() {
+                // Code
+                let line = String::from(line.unwrap());
+
+                // Tokens
+                let tokens = ham::get_tokens(line);
+
+                // Ast tree root
+                let tree = Mutex::new(ast::ast_operations::Expression::new());
+
+                // Tree
+                ham::get_ast(tokens, &tree);
+
+                // Run
+                ham::run_ast(&tree, &stack);
+
+                println!("  <- ");
+
+                println!(">");
+            }
+        }
+        _ => {}
     }
 }
