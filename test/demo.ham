@@ -8,13 +8,13 @@ fn anything(val){
 
 }
 
-fn test(test val2){
-    return val2
+fn test(test){
+    return test
 }
 
 print(
     anything(
-        test("yooo" 2)
+        test("yooo")
     )
 )
 
