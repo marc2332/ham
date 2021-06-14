@@ -1,6 +1,6 @@
 #[derive(Clone, Debug)]
 pub struct Token {
-    pub ast_type: i32,
+    pub ast_type: usize,
     pub value: String,
 }
 

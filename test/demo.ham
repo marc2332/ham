@@ -1,24 +1,17 @@
 
-let val = true
-let val2 = false
-let val3 = "nice"
 
-fn anything(){
-    fn o(){
-        ah()
-        print(val2)
-    }
+fn anything(val){
 
-    fn ah(){
-        print(val)
-    }
+    print(val)
 
-    o()
-
-    print(val3)
+    return val
 
 }
 
-anything()
 
 
+print(
+    anything(
+        "ah"
+    )
+)

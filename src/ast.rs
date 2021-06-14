@@ -1,6 +1,7 @@
 pub mod ast_operations {
 
     /* BASE */
+    use crate::utils::primitive_values::PrimitiveValueBase;
     use crate::utils::{op_codes, primitive_values};
     use std::any::Any;
     use uuid::Uuid;
@@ -11,6 +12,22 @@ pub mod ast_operations {
     }
 
     dyn_clone::clone_trait_object!(AstBase);
+
+    /* RETURN STATEMENT */
+
+    #[derive(Clone)]
+    pub struct ReturnStatement {
+        pub value: BoxedValue,
+    }
+
+    impl AstBase for ReturnStatement {
+        fn get_type(&self) -> usize {
+            op_codes::RETURN
+        }
+        fn as_self(&self) -> &dyn Any {
+            self
+        }
+    }
 
     /* FUNCTION ARGUMENT */
     #[derive(Clone)]
@@ -29,7 +46,7 @@ pub mod ast_operations {
                     op_codes::STRING
                 }
                 // Is Number
-                val if val.as_str().parse::<i32>().is_ok() => op_codes::NUMBER,
+                val if val.as_str().parse::<usize>().is_ok() => op_codes::NUMBER,
                 // Is Reference
                 _ => op_codes::REFERENCE,
             };
@@ -41,7 +58,6 @@ pub mod ast_operations {
         }
     }
 
-
     /* RESULT EXPRESSION */
     pub trait ResultExpressionBase {
         fn new(relation: op_codes::Val, left: Argument, right: Argument) -> Self;
@@ -51,7 +67,7 @@ pub mod ast_operations {
     pub struct ResultExpression {
         pub left: Argument,
         pub relation: op_codes::Val,
-        pub right: Argument
+        pub right: Argument,
     }
 
     impl ResultExpressionBase for ResultExpression {
@@ -59,13 +75,13 @@ pub mod ast_operations {
             ResultExpression {
                 left,
                 relation,
-                right
+                right,
             }
         }
     }
 
     impl AstBase for ResultExpression {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::RES_EXPRESSION
         }
         fn as_self(&self) -> &dyn Any {
@@ -85,16 +101,16 @@ pub mod ast_operations {
     }
 
     impl IfConditionalBase for IfConditional {
-        fn new(conditions: Vec<ResultExpression>, body: Vec<Box<dyn self::AstBase>>) -> IfConditional {
-            IfConditional {
-                conditions,
-                body
-            }
+        fn new(
+            conditions: Vec<ResultExpression>,
+            body: Vec<Box<dyn self::AstBase>>,
+        ) -> IfConditional {
+            IfConditional { conditions, body }
         }
     }
 
     impl AstBase for IfConditional {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::IF_CONDITIONAL
         }
         fn as_self(&self) -> &dyn Any {
@@ -105,26 +121,36 @@ pub mod ast_operations {
     /* FUNCTION DEFINITION */
     pub trait FnDefinitionBase {
         fn get_def_name(&self) -> String;
-        fn new(def_name: String, body: Vec<Box<dyn self::AstBase>>) -> Self;
+        fn new(def_name: String, body: Vec<Box<dyn self::AstBase>>, arguments: Vec<String>)
+            -> Self;
     }
 
     #[derive(Clone)]
     pub struct FnDefinition {
         pub def_name: String,
         pub body: Vec<Box<dyn self::AstBase>>,
+        pub arguments: Vec<String>,
     }
 
     impl FnDefinitionBase for FnDefinition {
         fn get_def_name(&self) -> String {
             return self.def_name.clone();
         }
-        fn new(def_name: String, body: Vec<Box<dyn self::AstBase>>) -> FnDefinition {
-            FnDefinition { def_name, body }
+        fn new(
+            def_name: String,
+            body: Vec<Box<dyn self::AstBase>>,
+            arguments: Vec<String>,
+        ) -> FnDefinition {
+            FnDefinition {
+                def_name,
+                body,
+                arguments,
+            }
         }
     }
 
     impl AstBase for FnDefinition {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::FN_DEF
         }
         fn as_self(&self) -> &dyn Any {
@@ -157,7 +183,7 @@ pub mod ast_operations {
     }
 
     impl AstBase for VarDefinition {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::VAR_DEF
         }
         fn as_self(&self) -> &dyn Any {
@@ -190,7 +216,7 @@ pub mod ast_operations {
     }
 
     impl AstBase for VarAssignment {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::VAR_ASSIGN
         }
         fn as_self(&self) -> &dyn Any {
@@ -207,9 +233,15 @@ pub mod ast_operations {
     }
 
     impl AstBase for BoxedValue {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::LEFT_ASSIGN
         }
+        fn as_self(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    impl PrimitiveValueBase for BoxedValue {
         fn as_self(&self) -> &dyn Any {
             self
         }
@@ -225,7 +257,7 @@ pub mod ast_operations {
     }
 
     impl AstBase for Expression {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::EXPRESSION
         }
         fn as_self(&self) -> &dyn Any {
@@ -261,11 +293,11 @@ pub mod ast_operations {
     pub struct FnCall {
         pub token_type: op_codes::Val,
         pub fn_name: String,
-        pub arguments: Vec<Argument>,
+        pub arguments: Vec<BoxedValue>,
     }
 
     impl AstBase for FnCall {
-        fn get_type(&self) -> i32 {
+        fn get_type(&self) -> usize {
             op_codes::FN_CALL
         }
         fn as_self(&self) -> &dyn Any {
@@ -284,6 +316,12 @@ pub mod ast_operations {
                 fn_name,
                 arguments: Vec::new(),
             }
+        }
+    }
+
+    impl PrimitiveValueBase for FnCall {
+        fn as_self(&self) -> &dyn Any {
+            self
         }
     }
 }

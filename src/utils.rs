@@ -1,5 +1,5 @@
 pub mod op_codes {
-    pub type Val = i32;
+    pub type Val = usize;
 
     /*
      * Each code identifies a different type of token / operation
@@ -22,13 +22,14 @@ pub mod op_codes {
     pub const IF_CONDITIONAL: Val = 14;
     pub const RES_EXPRESSION: Val = 15;
     pub const EQUAL_CONDITION: Val = 16; // ==
+    pub const RETURN: Val = 17; // ==
 
     // This must be equal to the latest code
-    const CODES_RANGE: Val = 16;
+    const CODES_RANGE: Val = 17;
 
     // If the code is lower than 0 or greater than the defined range above it becomes invalid
     pub fn is_valid(op_code: Val) -> bool {
-        if op_code < 0 || op_code > CODES_RANGE {
+        if op_code > CODES_RANGE {
             false
         } else {
             true
@@ -109,7 +110,7 @@ pub mod primitive_values {
      */
 
     #[derive(Clone)]
-    pub struct Number(pub i32);
+    pub struct Number(pub usize);
 
     // Implement base methods for Number
     impl PrimitiveValueBase for Number {
@@ -120,16 +121,16 @@ pub mod primitive_values {
 
     // Custom methods for Number
     pub trait NumberValueBase {
-        fn new(val: i32) -> Number;
-        fn get_state(&self) -> i32;
+        fn new(val: usize) -> Number;
+        fn get_state(&self) -> usize;
     }
 
     impl NumberValueBase for Number {
-        fn new(val: i32) -> Number {
+        fn new(val: usize) -> Number {
             Number(val)
         }
 
-        fn get_state(&self) -> i32 {
+        fn get_state(&self) -> usize {
             self.0
         }
     }
@@ -164,10 +165,10 @@ pub mod primitive_values {
         }
     }
 }
-
+//get_tokens_in_group_of(starting_token, op_codes::OPEN_PARENT, op_codes::CLOSE_PARENT)
 pub mod errors {
 
-    pub type ErrorVal = i32;
+    pub type ErrorVal = usize;
 
     // Function wasn't found in the current scope
     pub const FUNCTION_NOT_FOUND: ErrorVal = 0;

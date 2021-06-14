@@ -43,8 +43,8 @@ fn main() {
             // Tree
             ham::move_tokens_into_ast(tokens, &tree);
 
-            // Run
-            ham::run_ast(&tree, &stack);
+            // Run (it will always return a Result<Err> because it doesn't return anything)
+            ham::run_ast(&tree, &stack).err();
         }
         Some("repl") => {
             println!("{}", CLI_MSG);
@@ -68,8 +68,8 @@ fn main() {
                 // Tree
                 ham::move_tokens_into_ast(tokens, &tree);
 
-                // Run
-                ham::run_ast(&tree, &stack);
+                // Run (it will always return a Result<Err> because it doesn't return anything)
+                ham::run_ast(&tree, &stack).unwrap();
 
                 println!("  <- ");
 
