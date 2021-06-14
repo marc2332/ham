@@ -8,10 +8,14 @@ fn anything(val){
 
 }
 
-
+fn test(test val2){
+    return val2
+}
 
 print(
     anything(
-        "ah"
+        test("yooo" 2)
     )
 )
+
+print(test(5))

@@ -526,7 +526,7 @@ pub fn run_ast(
     let ast = ast.lock().unwrap();
 
     // Search variables in the stack by its name
-    let get_var_reference = |var_name: String| -> Result<VariableDef, ()> {
+    fn get_var_reference_fn(stack: &Mutex<Stack>, var_name: String) -> Result<VariableDef, ()> {
         let stack = stack.lock().unwrap();
 
         for op_var in &stack.variables {
@@ -537,10 +537,10 @@ pub fn run_ast(
 
         errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
         Err(())
-    };
+    }
 
     // Search functions in the stack by its name
-    let get_fn = |fn_name: String| -> Result<FunctionDef, ()> {
+    fn get_func_fn(fn_name: String, stack: &Mutex<Stack>) -> Result<FunctionDef, ()> {
         let stack = stack.lock().unwrap();
         for op_fn in &stack.functions {
             if op_fn.name == fn_name {
@@ -550,10 +550,18 @@ pub fn run_ast(
 
         errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.clone()]);
         Err(())
+    }
+    // Closure version of above
+    let get_func = |fn_name: String| -> Result<FunctionDef, ()> {
+        return get_func_fn(fn_name, stack);
     };
 
     // Resolve values
-    let resolve_val = |val_type: op_codes::Val, value: String| -> Result<String, ()> {
+    fn resolve_val_fn(
+        val_type: op_codes::Val,
+        value: String,
+        stack: &Mutex<Stack>,
+    ) -> Result<String, ()> {
         let res: String = match val_type {
             // If the value is type String, Number or boolean then return it self
             op_codes::STRING => value,
@@ -563,7 +571,7 @@ pub fn run_ast(
             // If the value is a reference to a variable then returns the variable's current value
             op_codes::REFERENCE => {
                 let ref_name = value.clone();
-                let ref_value = get_var_reference(ref_name.clone());
+                let ref_value = get_var_reference_fn(stack, ref_name.clone());
 
                 let mut val = String::from("");
                 if ref_value.is_ok() {
@@ -593,6 +601,10 @@ pub fn run_ast(
         };
 
         Ok(res)
+    }
+    // Closure version of above
+    let resolve_val = |val_type: op_codes::Val, value: String| -> Result<String, ()> {
+        return resolve_val_fn(val_type, value, stack);
     };
 
     fn downcast_val<T: 'static>(val: &dyn Any) -> &T {
@@ -603,9 +615,12 @@ pub fn run_ast(
      * For static values it will just return the input but for references it will resolve its value
      * and then return it
      */
-    let resolve_def = |val_type: op_codes::Val,
-                       ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
-     -> (op_codes::Val, Box<dyn primitive_values::PrimitiveValueBase>) {
+    fn resolve_def_fn(
+        val_type: op_codes::Val,
+        ref_val: Box<dyn primitive_values::PrimitiveValueBase>,
+        stack: &Mutex<Stack>,
+        ast: &MutexGuard<ast_operations::Expression>,
+    ) -> (op_codes::Val, Box<dyn primitive_values::PrimitiveValueBase>) {
         match val_type {
             op_codes::STRING => (val_type, ref_val),
             op_codes::BOOLEAN => (val_type, ref_val),
@@ -615,7 +630,7 @@ pub fn run_ast(
                     .0
                     .clone();
 
-                let ref_def = get_var_reference(val);
+                let ref_def = get_var_reference_fn(stack, val);
 
                 if ref_def.is_ok() {
                     let ref_assign = ref_def.unwrap();
@@ -626,7 +641,7 @@ pub fn run_ast(
             }
             op_codes::FN_CALL => {
                 let fn_call = downcast_val::<ast_operations::FnCall>(ref_val.as_self());
-                let ref_fn = get_fn(fn_call.fn_name.clone());
+                let ref_fn = get_func_fn(fn_call.fn_name.clone(), stack);
 
                 // If the calling function is found
                 if ref_fn.is_ok() {
@@ -634,24 +649,25 @@ pub fn run_ast(
 
                     for argument in &fn_call.arguments {
                         // WIP
-                        let val =
-                            downcast_val::<primitive_values::StringVal>(argument.value.as_self());
-                        let ref_value = resolve_val(argument.interface, val.0.clone());
 
-                        if ref_value.is_ok() {
-                            arguments.push(ref_value.unwrap().to_string());
-                        }
+                        let refa =
+                            resolve_def_fn(argument.interface, argument.value.clone(), stack, &ast);
+
+                        let ref_value = stringify_arg(refa);
+
+                        arguments.push(ref_value);
                     }
 
-                    let func = ref_fn.unwrap();
-
-                    let return_val = (func.cb)(func.arguments, arguments, func.body, &stack, &ast);
-
-                    // WIP
-
-                    if return_val.is_ok() {
-                        let boxed_val = return_val.unwrap();
-                        (boxed_val.interface, boxed_val.value)
+                    if ref_fn.is_ok() {
+                        let func = ref_fn.unwrap();
+                        let return_val =
+                            (func.cb)(func.arguments, arguments, func.body, &stack, &ast);
+                        if return_val.is_ok() {
+                            let boxed_val = return_val.unwrap();
+                            (boxed_val.interface, boxed_val.value)
+                        } else {
+                            (0, Box::new(primitive_values::Number(0)))
+                        }
                     } else {
                         (0, Box::new(primitive_values::Number(0)))
                     }
@@ -661,6 +677,12 @@ pub fn run_ast(
             }
             _ => (0, Box::new(primitive_values::Number(0))),
         }
+    }
+    // Closure version of above
+    let resolve_def = |val_type: op_codes::Val,
+                       ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
+     -> (op_codes::Val, Box<dyn primitive_values::PrimitiveValueBase>) {
+        return resolve_def_fn(val_type, ref_val, stack, &ast);
     };
 
     // Modify a variable
@@ -873,7 +895,7 @@ pub fn run_ast(
              */
             op_codes::FN_CALL => {
                 let fn_call = downcast_val::<ast_operations::FnCall>(op.as_self());
-                let ref_fn = get_fn(fn_call.fn_name.clone());
+                let ref_fn = get_func(fn_call.fn_name.clone());
 
                 // If the calling function is found
                 if ref_fn.is_ok() {
