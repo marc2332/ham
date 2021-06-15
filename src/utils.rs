@@ -1,4 +1,11 @@
 pub mod op_codes {
+
+    #[derive(Clone)]
+    pub enum Directions {
+        LeftToRight,
+        RightToLeft,
+    }
+
     pub type Val = usize;
 
     /*

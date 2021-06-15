@@ -29,49 +29,20 @@ pub mod ast_operations {
         }
     }
 
-    /* FUNCTION ARGUMENT */
-    #[derive(Clone)]
-    pub struct Argument {
-        pub val_type: op_codes::Val,
-        pub value: String,
-    }
-
-    impl Argument {
-        pub fn new(value: String) -> Argument {
-            let val_type = match value.clone() {
-                // Is String
-                val if val.chars().nth(0).unwrap() == '"'
-                    && val.chars().nth(val.len() - 1).unwrap() == '"' =>
-                {
-                    op_codes::STRING
-                }
-                // Is Number
-                val if val.as_str().parse::<usize>().is_ok() => op_codes::NUMBER,
-                // Is Reference
-                _ => op_codes::REFERENCE,
-            };
-
-            Argument {
-                val_type,
-                value: value.clone(),
-            }
-        }
-    }
-
     /* RESULT EXPRESSION */
     pub trait ResultExpressionBase {
-        fn new(relation: op_codes::Val, left: Argument, right: Argument) -> Self;
+        fn new(relation: op_codes::Val, left: BoxedValue, right: BoxedValue) -> Self;
     }
 
     #[derive(Clone)]
     pub struct ResultExpression {
-        pub left: Argument,
+        pub left: BoxedValue,
         pub relation: op_codes::Val,
-        pub right: Argument,
+        pub right: BoxedValue,
     }
 
     impl ResultExpressionBase for ResultExpression {
-        fn new(relation: op_codes::Val, left: Argument, right: Argument) -> ResultExpression {
+        fn new(relation: op_codes::Val, left: BoxedValue, right: BoxedValue) -> ResultExpression {
             ResultExpression {
                 left,
                 relation,

@@ -9,6 +9,7 @@ use crate::utils::primitive_values::{
 };
 use crate::utils::{errors, op_codes, primitive_values};
 
+use crate::utils::op_codes::Directions;
 use regex::Regex;
 use std::any::Any;
 use std::sync::{Mutex, MutexGuard};
@@ -99,25 +100,45 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
         from: usize,
         to: op_codes::Val,
         tokens: TokensList,
+        direction: Directions,
     ) -> Vec<(usize, Token)> {
         let mut found_tokens = Vec::new();
 
         let mut tok_n = from;
 
-        while tok_n < tokens.len() {
-            if tokens[tok_n].ast_type == to {
-                break;
-            } else {
-                found_tokens.push((tok_n, tokens[tok_n].clone()))
+        match direction {
+            // Get tokens from left to right
+            Directions::LeftToRight => {
+                while tok_n < tokens.len() {
+                    if tokens[tok_n].ast_type == to {
+                        break;
+                    } else {
+                        found_tokens.push((tok_n, tokens[tok_n].clone()))
+                    }
+                    tok_n += 1;
+                }
             }
-            tok_n += 1;
+
+            // Get tokens from right to left
+            Directions::RightToLeft => {
+                while tok_n > 0 {
+                    if tokens[tok_n - 1].ast_type == to {
+                        break;
+                    } else {
+                        found_tokens.push((tok_n - 1, tokens[tok_n - 1].clone()))
+                    }
+                    tok_n -= 1
+                }
+
+                found_tokens.reverse();
+            }
         }
 
         found_tokens
     }
 
     let get_tokens_from_to = |from: usize, to: op_codes::Val| -> Vec<(usize, Token)> {
-        return get_tokens_from_to_fn(from, to, tokens.clone());
+        return get_tokens_from_to_fn(from, to, tokens.clone(), Directions::LeftToRight);
     };
 
     // Get all the tokens in a group (expression blocks, arguments)
@@ -155,6 +176,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
         val: String,
         tok_n: usize,
         tokens: TokensList,
+        direction: Directions,
     ) -> ast_operations::BoxedValue {
         match val.as_str() {
             // True boolean
@@ -184,35 +206,72 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
             // References to other values (ej: referencing to a variable)
             val => {
                 if tok_n < tokens.len() - 1 {
-                    let next_token = tokens[tok_n + 1].clone();
+                    let next_token = {
+                        match direction {
+                            Directions::LeftToRight => tokens[tok_n + 1].clone(),
+                            _ => tokens[tok_n - 1].clone(),
+                        }
+                    };
 
                     let reference_type = match next_token.ast_type {
                         op_codes::OPEN_PARENT => op_codes::FN_CALL,
+                        op_codes::CLOSE_PARENT => op_codes::FN_CALL,
                         _ => 0,
                     };
 
                     match reference_type {
                         op_codes::FN_CALL => {
-                            let mut ast_token = ast_operations::FnCall::new(String::from(val));
+                            // Position where it will be starting getting the argument tokens
+                            let starting_token: usize = {
+                                match direction {
+                                    Directions::LeftToRight => tok_n + 2,
+                                    _ => tok_n,
+                                }
+                            };
 
-                            // Ignore itself and the (
-                            let starting_token = tok_n + 2;
+                            // Get argument tokens
+                            let mut arguments_tokens: Vec<(usize, Token)> = {
+                                match direction {
+                                    Directions::LeftToRight => get_tokens_from_to_fn(
+                                        starting_token,
+                                        op_codes::CLOSE_PARENT,
+                                        tokens.clone(),
+                                        direction.clone(),
+                                    ),
+                                    Directions::RightToLeft => get_tokens_from_to_fn(
+                                        starting_token,
+                                        op_codes::IF_CONDITIONAL,
+                                        tokens.clone(),
+                                        direction.clone(),
+                                    ),
+                                }
+                            };
 
-                            let arguments_tokens: Vec<(usize, Token)> = get_tokens_from_to_fn(
-                                starting_token,
-                                op_codes::CLOSE_PARENT,
-                                tokens.clone(),
-                            );
+                            let mut ast_token = ast_operations::FnCall::new({
+                                match direction {
+                                    // When reading from left to right, we know current token.value is it's name
+                                    Directions::LeftToRight => String::from(val),
 
-                            let arguments = convert_tokens_into_arguments(
+                                    // But when reading from right to left we need to first get all the tokens which are part of the function
+                                    Directions::RightToLeft => {
+                                        let fn_name =
+                                            String::from(arguments_tokens[0].1.value.clone());
+
+                                        // Now we can remove thefunction name from the arguments token
+                                        arguments_tokens.remove(0);
+                                        fn_name
+                                    }
+                                }
+                            });
+
+                            // Transfrom the tokens into arguments
+                            ast_token.arguments = convert_tokens_into_arguments(
                                 arguments_tokens
                                     .clone()
                                     .iter()
                                     .map(|(_, token)| token.clone())
                                     .collect(),
                             );
-
-                            ast_token.arguments = arguments;
 
                             ast_operations::BoxedValue {
                                 interface: op_codes::FN_CALL,
@@ -235,9 +294,10 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
     }
 
     let get_assignment_token = |val: String, tok_n: usize| -> ast_operations::BoxedValue {
-        return get_assignment_token_fn(val, tok_n, tokens.clone());
+        return get_assignment_token_fn(val, tok_n, tokens.clone(), Directions::LeftToRight);
     };
 
+    // Get function arguments
     fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::BoxedValue> {
         let mut args = Vec::new();
 
@@ -251,16 +311,26 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 op_codes::OPEN_PARENT => tok_n += 1,
                 op_codes::CLOSE_PARENT => tok_n += 1,
                 _ => {
-                    let arguments_tokens: Vec<(usize, Token)> =
-                        get_tokens_from_to_fn(tok_n, op_codes::CLOSE_PARENT, tokens.clone());
+                    let arguments_tokens: Vec<(usize, Token)> = get_tokens_from_to_fn(
+                        tok_n,
+                        op_codes::CLOSE_PARENT,
+                        tokens.clone(),
+                        Directions::LeftToRight,
+                    );
 
-                    args.push(get_assignment_token_fn(
+                    let assigned_token = get_assignment_token_fn(
                         token.value.clone(),
                         tok_n,
                         tokens.clone(),
-                    ));
+                        Directions::LeftToRight,
+                    );
 
-                    tok_n += arguments_tokens.len() + 1;
+                    match assigned_token.interface {
+                        op_codes::FN_CALL => tok_n += arguments_tokens.len() + 1,
+                        _ => tok_n += 1,
+                    }
+
+                    args.push(assigned_token);
                 }
             }
         }
@@ -273,26 +343,41 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
     ) -> Vec<ast_operations::ResultExpression> {
         let mut exprs = Vec::new();
 
-        let left_token = tokens[0].clone();
-
         let mut tok_n = 1;
 
         while tok_n < tokens.len() {
+            let left_token = tokens[tok_n - 1].clone();
             let token = tokens[tok_n].clone();
 
             match token.ast_type {
                 op_codes::EQUAL_CONDITION => {
                     let right_token = tokens[tok_n + 1].clone();
 
+                    let left_token = get_assignment_token_fn(
+                        left_token.value.clone(),
+                        tok_n,
+                        tokens.clone(),
+                        Directions::RightToLeft,
+                    );
+
+                    let right_token = get_assignment_token_fn(
+                        right_token.value.clone(),
+                        tok_n + 1,
+                        tokens.clone(),
+                        Directions::LeftToRight,
+                    );
+
                     exprs.push(ast_operations::ResultExpression::new(
                         op_codes::EQUAL_CONDITION,
-                        ast_operations::Argument::new(left_token.value.clone()),
-                        ast_operations::Argument::new(right_token.value.clone()),
+                        left_token.clone(),
+                        right_token.clone(),
                     ));
 
                     tok_n += 2;
                 }
-                _ => panic!("UNHANDLED CONDITION"),
+                _ => {
+                    tok_n += 1;
+                }
             }
         }
 
@@ -511,11 +596,7 @@ impl Stack {
         }
     }
     pub fn drop_ops_from_id(&mut self, id: String) {
-        for (index, op_var) in self.variables.clone().iter().enumerate() {
-            if op_var.expr_id == id {
-                self.variables.remove(index);
-            }
-        }
+        self.variables.retain(|var| var.expr_id != id);
     }
 }
 
@@ -554,57 +635,6 @@ pub fn run_ast(
     // Closure version of above
     let get_func = |fn_name: String| -> Result<FunctionDef, ()> {
         return get_func_fn(fn_name, stack);
-    };
-
-    // Resolve values
-    fn resolve_val_fn(
-        val_type: op_codes::Val,
-        value: String,
-        stack: &Mutex<Stack>,
-    ) -> Result<String, ()> {
-        let res: String = match val_type {
-            // If the value is type String, Number or boolean then return it self
-            op_codes::STRING => value,
-            op_codes::BOOLEAN => value,
-            op_codes::NUMBER => value,
-
-            // If the value is a reference to a variable then returns the variable's current value
-            op_codes::REFERENCE => {
-                let ref_name = value.clone();
-                let ref_value = get_var_reference_fn(stack, ref_name.clone());
-
-                let mut val = String::from("");
-                if ref_value.is_ok() {
-                    let ref_value = ref_value.unwrap();
-                    val = match ref_value.val_type {
-                        op_codes::BOOLEAN => {
-                            downcast_val::<primitive_values::Boolean>(ref_value.value.as_self())
-                                .0
-                                .to_string()
-                        }
-                        op_codes::STRING => {
-                            downcast_val::<primitive_values::StringVal>(ref_value.value.as_self())
-                                .0
-                                .clone()
-                        }
-                        op_codes::NUMBER => {
-                            downcast_val::<primitive_values::Number>(ref_value.value.as_self())
-                                .0
-                                .to_string()
-                        }
-                        _ => String::from(""),
-                    }
-                }
-                val
-            }
-            _ => String::from(""),
-        };
-
-        Ok(res)
-    }
-    // Closure version of above
-    let resolve_val = |val_type: op_codes::Val, value: String| -> Result<String, ()> {
-        return resolve_val_fn(val_type, value, stack);
     };
 
     fn downcast_val<T: 'static>(val: &dyn Any) -> &T {
@@ -701,28 +731,24 @@ pub fn run_ast(
 
     // Check if a conditional is true or not
     let eval_condition = |condition_code: op_codes::Val,
-                          left_val: ast_operations::Argument,
-                          right_val: ast_operations::Argument|
+                          left_val: ast_operations::BoxedValue,
+                          right_val: ast_operations::BoxedValue|
      -> bool {
-        let left_val = resolve_val(left_val.val_type.clone(), left_val.value.clone());
-        let right_val = resolve_val(right_val.val_type.clone(), right_val.value.clone());
+        let left_val = resolve_def(left_val.interface.clone(), left_val.value.clone());
+        let right_val = resolve_def(right_val.interface.clone(), right_val.value.clone());
 
-        if left_val.is_ok() && right_val.is_ok() {
-            match condition_code {
-                op_codes::EQUAL_CONDITION => {
-                    let left_val = left_val.unwrap();
-                    let right_val = right_val.unwrap();
+        match condition_code {
+            op_codes::EQUAL_CONDITION => {
+                let left_val = stringify_arg(left_val);
+                let right_val = stringify_arg(right_val);
 
-                    if left_val == right_val {
-                        true
-                    } else {
-                        false
-                    }
+                if left_val == right_val {
+                    true
+                } else {
+                    false
                 }
-                _ => false,
             }
-        } else {
-            false
+            _ => false,
         }
     };
 
