@@ -6,3 +6,5 @@ pub struct Token {
 
 pub type LinesList = Vec<Vec<String>>;
 pub type TokensList = Vec<Token>;
+
+pub type IndexedTokenList = Vec<(usize, Token)>;

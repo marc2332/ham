@@ -209,8 +209,7 @@ pub mod errors {
     Returned value <{}> by function <{}> is not used\n
     let value = {}({});
     ¯¯¯¯¯¯¯¯¯
-    ↑ Help, Assign the return value to a variable.
-                ",
+    ↑ Help, Assign the return value to a variable. ",
                     args[0], args[1], args[1], args[2]
                 )
             }

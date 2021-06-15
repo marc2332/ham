@@ -1,9 +1,12 @@
 mod ast;
 mod ham;
-mod tokenizer;
+mod runtime;
+mod stack;
+mod types;
 mod utils;
 
 use crate::ast::ast_operations::ExpressionBase;
+use crate::stack::Stack;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use std::fs;
 use std::io;
@@ -32,7 +35,7 @@ fn main() {
                 fs::read_to_string(filename).expect("Something went wrong reading the file");
 
             // Memory stack
-            let stack = Mutex::new(ham::Stack::new());
+            let stack = Mutex::new(Stack::new());
 
             // Tokens
             let tokens = ham::get_tokens(contents);
@@ -50,7 +53,7 @@ fn main() {
             println!("{}", CLI_MSG);
 
             // Memory stack
-            let stack = Mutex::new(ham::Stack::new());
+            let stack = Mutex::new(Stack::new());
 
             let stdin = io::stdin();
 
