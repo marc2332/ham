@@ -12,3 +12,5 @@ if test(1 5) == test(5 99) {
 if test(1 5) == test(1 500) {
     println(false "impossible")
 }
+
+test(1 5)

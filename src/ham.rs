@@ -14,6 +14,9 @@ use regex::Regex;
 use std::any::Any;
 use std::sync::{Mutex, MutexGuard};
 
+/*
+ * Split the text by the passed regex but also keep these words which are removed when splitting
+ */
 fn split<'a>(r: &'a Regex, text: &'a str) -> Vec<&'a str> {
     let mut result = Vec::new();
     let mut last = 0;
@@ -31,6 +34,9 @@ fn split<'a>(r: &'a Regex, text: &'a str) -> Vec<&'a str> {
     result
 }
 
+/*
+ * Transform the code into lines
+ */
 fn get_lines(code: String) -> LinesList {
     let mut lines = Vec::new();
 
@@ -54,6 +60,9 @@ fn get_lines(code: String) -> LinesList {
     return lines;
 }
 
+/*
+ * Trasnform a list of lines into a tokens list
+ */
 fn transform_into_tokens(lines: LinesList) -> TokensList {
     let mut tokens = Vec::new();
 
@@ -87,6 +96,9 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
     return tokens;
 }
 
+/*
+ * Transform the code into a list of tokens
+ */
 pub fn get_tokens(code: String) -> TokensList {
     let lines = self::get_lines(code);
     return self::transform_into_tokens(lines);
@@ -678,14 +690,14 @@ pub fn run_ast(
                     let mut arguments = Vec::new();
 
                     for argument in &fn_call.arguments {
-                        // WIP
-
-                        let refa =
+                        let arg_ref =
                             resolve_def_fn(argument.interface, argument.value.clone(), stack, &ast);
 
-                        let ref_value = stringify_arg(refa);
+                        let arg_stringified = stringify_arg(arg_ref);
 
-                        arguments.push(ref_value);
+                        if arg_stringified.is_ok() {
+                            arguments.push(arg_stringified.unwrap());
+                        }
                     }
 
                     if ref_fn.is_ok() {
@@ -752,18 +764,18 @@ pub fn run_ast(
         }
     };
 
-    fn stringify_arg(arg: (usize, Box<dyn PrimitiveValueBase>)) -> String {
+    fn stringify_arg(arg: (usize, Box<dyn PrimitiveValueBase>)) -> Result<String, usize> {
         match arg.0 {
-            op_codes::BOOLEAN => downcast_val::<primitive_values::Boolean>(arg.1.as_self())
+            op_codes::BOOLEAN => Ok(downcast_val::<primitive_values::Boolean>(arg.1.as_self())
                 .0
-                .to_string(),
-            op_codes::STRING => downcast_val::<primitive_values::StringVal>(arg.1.as_self())
+                .to_string()),
+            op_codes::STRING => Ok(downcast_val::<primitive_values::StringVal>(arg.1.as_self())
                 .0
-                .clone(),
-            op_codes::NUMBER => downcast_val::<primitive_values::Number>(arg.1.as_self())
+                .clone()),
+            op_codes::NUMBER => Ok(downcast_val::<primitive_values::Number>(arg.1.as_self())
                 .0
-                .to_string(),
-            _ => String::from(""),
+                .to_string()),
+            _ => Err(arg.0),
         }
     }
 
@@ -930,18 +942,48 @@ pub fn run_ast(
                     for argument in &fn_call.arguments {
                         let arg_ref = resolve_def(argument.interface, argument.value.clone());
 
-                        let arg_val = stringify_arg(arg_ref.clone());
+                        let argument_stringified = stringify_arg(arg_ref.clone());
 
-                        arguments.push(arg_val.clone());
+                        if argument_stringified.is_ok() {
+                            arguments.push(argument_stringified.unwrap());
+                        } else {
+                            errors::raise_error(
+                                errors::BROKEN_ARGUMENT,
+                                vec![argument.interface.to_string()],
+                            )
+                        }
                     }
 
                     let func = ref_fn.unwrap();
 
-                    let _ = (func.cb)(func.arguments, arguments, func.body, &stack, &ast);
+                    let res_func =
+                        (func.cb)(func.arguments, arguments.clone(), func.body, &stack, &ast);
+
+                    if res_func.is_ok() {
+                        let ret_val = res_func.unwrap();
+
+                        let val_stringified = stringify_arg((ret_val.interface, ret_val.value));
+
+                        if val_stringified.is_ok() {
+                            let val_stringified = val_stringified.unwrap();
+
+                            // The function returned something that ends up not being used, throw error
+                            errors::raise_error(
+                                errors::RETURNED_VALUE_NOT_USED,
+                                vec![
+                                    val_stringified,
+                                    fn_call.fn_name.clone(),
+                                    arguments.join(" "),
+                                ],
+                            )
+                        }
+                    } else {
+                        // No value returned, OK
+                    }
                 }
             }
             _ => {
-                println!("IDK")
+                panic!("Unhandled code operation")
             }
         }
     }

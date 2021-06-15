@@ -189,17 +189,37 @@ pub mod errors {
     // Unhandled value type
     pub const UNHANDLED_VALUE_TYPE_CODE: ErrorVal = 3;
 
+    // Not used returned value
+    pub const RETURNED_VALUE_NOT_USED: ErrorVal = 4;
+
+    // Error when receiving an argument
+    pub const BROKEN_ARGUMENT: ErrorVal = 5;
+
     pub fn raise_error(kind: ErrorVal, args: Vec<String>) {
         let msg = match kind {
             FUNCTION_NOT_FOUND => format!("Function <{}> was not found", args[0]),
             VARIABLE_NOT_FOUND => format!("Variable <{}> was not found", args[0]),
             UNHANDLED_VALUE => format!("Value <{}> is not handled", args[0]),
             UNHANDLED_VALUE_TYPE_CODE => {
-                format!("Value type by code {} is not handled", args[0])
+                format!("Value type by code <{}> is not handled", args[0])
+            }
+            RETURNED_VALUE_NOT_USED => {
+                format!(
+                    "\n
+    Returned value <{}> by function <{}> is not used\n
+    let value = {}({});
+    ¯¯¯¯¯¯¯¯¯
+    ↑ Help, Assign the return value to a variable.
+                ",
+                    args[0], args[1], args[1], args[2]
+                )
+            }
+            BROKEN_ARGUMENT => {
+                format!("Argument by code <{}> couldn't be handled", args[0])
             }
             _ => String::from("Unhandled error"),
         };
 
-        println!(" \n :: Error :: {}", msg);
+        println!(" \n\n :: Error :: {}", msg);
     }
 }
