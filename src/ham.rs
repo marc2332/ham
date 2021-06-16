@@ -5,8 +5,8 @@ use crate::ast::ast_operations::{
 };
 use crate::runtime::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, downcast_val,
-    get_assignment_token_fn, get_func_fn, get_tokens_from_to_fn, resolve_reference,
-    value_to_string,
+    get_assignment_token_fn, get_func_fn, get_methods_in_type, get_tokens_from_to_fn,
+    get_var_reference_fn, modify_var, resolve_reference, value_to_string,
 };
 use crate::stack::{FunctionDef, Stack, VariableDef};
 use crate::types::{IndexedTokenList, LinesList, Token, TokensList};
@@ -46,7 +46,7 @@ fn get_lines(code: String) -> LinesList {
         let line = String::from(line);
         let mut line_ast = Vec::new();
 
-        let re = Regex::new(r"[\s+,:]|([()])").unwrap();
+        let re = Regex::new(r"[\s+,.:]|([()])").unwrap();
 
         // Every detected word
         for word in split(&re, &line) {
@@ -82,6 +82,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "if" => op_codes::IF_CONDITIONAL,
                 "==" => op_codes::EQUAL_CONDITION,
                 "return" => op_codes::RETURN,
+                "." => op_codes::PROP_ACCESS,
                 _ => op_codes::REFERENCE,
             };
 
@@ -202,6 +203,49 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 ast_tree.body.push(Box::new(ast_token));
             }
 
+            op_codes::PROP_ACCESS => {
+                let previous_token = tokens[token_n - 1].clone();
+                let next_token = tokens[token_n + 1].clone();
+
+                match next_token.ast_type {
+                    op_codes::REFERENCE => {
+                        let after_next_token = tokens[token_n + 2].clone();
+
+                        let reference_type = match after_next_token.ast_type {
+                            op_codes::OPEN_PARENT => op_codes::FN_CALL,
+                            _ => 0,
+                        };
+
+                        match reference_type {
+                            op_codes::FN_CALL => {
+                                let mut ast_token = ast_operations::FnCall::new(
+                                    next_token.value.clone(),
+                                    previous_token.value,
+                                );
+
+                                // Ignore itself and the (
+                                let starting_token = token_n + 2;
+
+                                let arguments_tokens = get_tokens_in_group_of(
+                                    starting_token,
+                                    op_codes::OPEN_PARENT,
+                                    op_codes::CLOSE_PARENT,
+                                );
+                                let arguments =
+                                    convert_tokens_into_arguments(arguments_tokens.clone());
+
+                                token_n += 2 + arguments_tokens.len();
+
+                                ast_token.arguments = arguments;
+                                ast_tree.body.push(Box::new(ast_token));
+                            }
+                            _ => (),
+                        };
+                    }
+                    _ => (),
+                }
+            }
+
             // Function definition
             op_codes::FN_DEF => {
                 let def_name = String::from(&tokens[token_n + 1].value.clone());
@@ -292,8 +336,10 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                         token_n += 3;
                     }
                     op_codes::FN_CALL => {
-                        let mut ast_token =
-                            ast_operations::FnCall::new(current_token.value.clone());
+                        let mut ast_token = ast_operations::FnCall::new(
+                            current_token.value.clone(),
+                            String::from(""),
+                        );
 
                         // Ignore itself and the (
                         let starting_token = token_n + 1;
@@ -331,7 +377,7 @@ pub fn run_ast(
 
     // Closure version of above
     let get_func = |fn_name: String| -> Result<FunctionDef, ()> {
-        return get_func_fn(fn_name, stack);
+        return get_func_fn(fn_name, stack.lock().unwrap().functions.clone());
     };
 
     // Closure version of above
@@ -341,20 +387,6 @@ pub fn run_ast(
          -> Result<(op_codes::Val, Box<dyn primitive_values::PrimitiveValueBase>), ()> {
             return resolve_reference(val_type, ref_val, stack, &ast);
         };
-
-    // Modify a variable
-    let modify_var = |var_name: String, value: Box<dyn primitive_values::PrimitiveValueBase>| {
-        let mut stack = stack.lock().unwrap();
-
-        for mut op_var in stack.variables.iter_mut() {
-            if op_var.name == var_name {
-                op_var.value = value.clone();
-                return ();
-            }
-        }
-
-        errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
-    };
 
     // Check if a conditional is true or not
     let eval_condition = |condition_code: op_codes::Val,
@@ -488,6 +520,7 @@ pub fn run_ast(
                                 value: Box::new(primitive_values::StringVal(String::from(arg))),
                                 val_type: op_codes::STRING,
                                 expr_id: expr_id.clone(),
+                                methods: Vec::new(),
                             });
                         }
 
@@ -529,6 +562,7 @@ pub fn run_ast(
                             val_type: ref_type,
                             value: ref_val,
                             expr_id: ast.expr_id.clone(),
+                            methods: get_methods_in_type(ref_type),
                         });
                     }
                 }
@@ -540,7 +574,11 @@ pub fn run_ast(
             op_codes::VAR_ASSIGN => {
                 let variable = downcast_val::<ast_operations::VarAssignment>(op.as_self());
 
-                modify_var(variable.var_name.clone(), variable.assignment.value.clone());
+                modify_var(
+                    stack,
+                    variable.var_name.clone(),
+                    variable.assignment.value.clone(),
+                );
             }
 
             /*
@@ -548,11 +586,24 @@ pub fn run_ast(
              */
             op_codes::FN_CALL => {
                 let fn_call = downcast_val::<ast_operations::FnCall>(op.as_self());
-                let ref_fn = get_func(fn_call.fn_name.clone());
+
+                let is_referenced = fn_call.reference_to != "";
+
+                let ref_fn = if is_referenced {
+                    let ref_var = get_var_reference_fn(stack, fn_call.reference_to.clone());
+
+                    get_func_fn(fn_call.fn_name.clone(), ref_var.unwrap().methods.clone())
+                } else {
+                    get_func(fn_call.fn_name.clone())
+                };
 
                 // If the calling function is found
                 if ref_fn.is_ok() {
                     let mut arguments = Vec::new();
+
+                    if is_referenced {
+                        arguments.push(fn_call.reference_to.clone());
+                    }
 
                     for argument in &fn_call.arguments {
                         let arg_ref = resolve_ref(argument.interface, argument.value.clone());

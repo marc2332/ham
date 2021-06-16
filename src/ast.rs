@@ -265,6 +265,7 @@ pub mod ast_operations {
         pub token_type: op_codes::Val,
         pub fn_name: String,
         pub arguments: Vec<BoxedValue>,
+        pub reference_to: String,
     }
 
     impl AstBase for FnCall {
@@ -277,15 +278,16 @@ pub mod ast_operations {
     }
 
     pub trait FnCallBase {
-        fn new(fn_name: String) -> Self;
+        fn new(fn_name: String, reference_to: String) -> Self;
     }
 
     impl FnCallBase for FnCall {
-        fn new(fn_name: String) -> FnCall {
+        fn new(fn_name: String, reference_to: String) -> FnCall {
             FnCall {
                 token_type: op_codes::FN_CALL,
                 fn_name,
                 arguments: Vec::new(),
+                reference_to,
             }
         }
     }

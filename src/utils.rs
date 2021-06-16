@@ -29,10 +29,11 @@ pub mod op_codes {
     pub const IF_CONDITIONAL: Val = 14;
     pub const RES_EXPRESSION: Val = 15;
     pub const EQUAL_CONDITION: Val = 16; // ==
-    pub const RETURN: Val = 17; // ==
+    pub const RETURN: Val = 17;
+    pub const PROP_ACCESS: Val = 18; // .
 
     // This must be equal to the latest code
-    const CODES_RANGE: Val = 17;
+    const CODES_RANGE: Val = 18;
 
     // If the code is lower than 0 or greater than the defined range above it becomes invalid
     pub fn is_valid(op_code: Val) -> bool {

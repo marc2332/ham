@@ -7,7 +7,8 @@ use crate::stack::{FunctionDef, Stack, VariableDef};
 use crate::types::{IndexedTokenList, Token, TokensList};
 use crate::utils::op_codes::Directions;
 use crate::utils::primitive_values::{
-    BooleanValueBase, NumberValueBase, PrimitiveValueBase, ReferenceValueBase, StringValueBase,
+    BooleanValueBase, Number, NumberValueBase, PrimitiveValueBase, ReferenceValueBase,
+    StringValueBase,
 };
 use crate::utils::{errors, op_codes, primitive_values};
 
@@ -30,9 +31,8 @@ pub fn get_var_reference_fn(stack: &Mutex<Stack>, var_name: String) -> Result<Va
 }
 
 // Search functions in the stack by its name
-pub fn get_func_fn(fn_name: String, stack: &Mutex<Stack>) -> Result<FunctionDef, ()> {
-    let stack = stack.lock().unwrap();
-    for op_fn in &stack.functions {
+pub fn get_func_fn(fn_name: String, functions: Vec<FunctionDef>) -> Result<FunctionDef, ()> {
+    for op_fn in functions {
         if op_fn.name == fn_name {
             return Ok(op_fn.clone());
         }
@@ -160,21 +160,25 @@ pub fn get_assignment_token_fn(
                             }
                         };
 
-                        let mut ast_token = ast_operations::FnCall::new({
-                            match direction {
-                                // When reading from left to right, we know current token.value is it's name
-                                Directions::LeftToRight => String::from(val),
+                        let mut ast_token = ast_operations::FnCall::new(
+                            {
+                                match direction {
+                                    // When reading from left to right, we know current token.value is it's name
+                                    Directions::LeftToRight => String::from(val),
 
-                                // But when reading from right to left we need to first get all the tokens which are part of the function
-                                Directions::RightToLeft => {
-                                    let fn_name = String::from(arguments_tokens[0].1.value.clone());
+                                    // But when reading from right to left we need to first get all the tokens which are part of the function
+                                    Directions::RightToLeft => {
+                                        let fn_name =
+                                            String::from(arguments_tokens[0].1.value.clone());
 
-                                    // Now we can remove thefunction name from the arguments token
-                                    arguments_tokens.remove(0);
-                                    fn_name
+                                        // Now we can remove thefunction name from the arguments token
+                                        arguments_tokens.remove(0);
+                                        fn_name
+                                    }
                                 }
-                            }
-                        });
+                            },
+                            String::new(),
+                        );
 
                         // Transfrom the tokens into arguments
                         ast_token.arguments = convert_tokens_into_arguments(
@@ -342,7 +346,10 @@ pub fn resolve_reference(
         }
         op_codes::FN_CALL => {
             let fn_call = downcast_val::<ast_operations::FnCall>(ref_val.as_self());
-            let ref_fn = get_func_fn(fn_call.fn_name.clone(), stack);
+            let ref_fn = get_func_fn(
+                fn_call.fn_name.clone(),
+                stack.lock().unwrap().functions.clone(),
+            );
 
             // If the calling function is found
             if ref_fn.is_ok() {
@@ -377,4 +384,59 @@ pub fn resolve_reference(
         }
         _ => Err(()),
     }
+}
+
+pub fn modify_var(
+    stack: &Mutex<Stack>,
+    var_name: String,
+    value: Box<dyn primitive_values::PrimitiveValueBase>,
+) {
+    let mut stack = stack.lock().unwrap();
+
+    for mut op_var in stack.variables.iter_mut() {
+        if op_var.name == var_name {
+            op_var.value = value.clone();
+            return ();
+        }
+    }
+
+    errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
+}
+
+pub fn get_methods_in_type(val_type: op_codes::Val) -> Vec<FunctionDef> {
+    let mut res = Vec::new();
+
+    match val_type {
+        op_codes::NUMBER => {
+            res.push(FunctionDef {
+                name: String::from("sum"),
+                body: vec![],
+                cb: |_, args, _, stack, _| {
+                    let var_name = args[0].clone();
+                    let num = args[1].clone();
+
+                    let var_ref = get_var_reference_fn(stack, var_name.clone());
+
+                    if var_ref.is_ok() {
+                        let var = var_ref.unwrap();
+                        let var_val = downcast_val::<Number>(var.value.as_self());
+                        let var_num = var_val.get_state();
+
+                        let new_num = num.parse::<usize>().unwrap();
+
+                        let var_new_val = Number::new(new_num + var_num);
+
+                        modify_var(stack, var_name, Box::new(var_new_val));
+                    }
+
+                    Err(())
+                },
+                expr_id: "".to_string(),
+                arguments: vec![],
+            });
+        }
+        _ => (),
+    }
+
+    res
 }

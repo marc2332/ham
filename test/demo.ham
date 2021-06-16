@@ -1,17 +1,18 @@
-fn test(o val){
-    if o == 1 {
-        return val
+
+let val = 0
+
+fn loop(){
+    if val == 15 {
+        return 0
     }
-    return o
+    val.sum(1)
+    println(val)
+    let res = loop()
+    return res
 }
 
-if test(1 5) == test(5 99) {
-    print("yes" true)
-}
+let _ = loop()
 
-if test(1 5) == test(1 500) {
-    println(false "impossible")
-}
+val = 0
 
-
-
+let _ = loop()

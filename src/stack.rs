@@ -12,6 +12,7 @@ pub struct VariableDef {
     pub val_type: op_codes::Val,
     pub value: Box<dyn primitive_values::PrimitiveValueBase>,
     pub expr_id: String,
+    pub methods: Vec<FunctionDef>,
 }
 
 /*
