@@ -1,18 +1,22 @@
 
 let val = 0
 
+
 fn loop(){
-    if val == 15 {
+    if val == 10 {
+        val = 0
         return 0
     }
-    val.sum(1)
+
+    val.mut_sum(1)
+    val = val.sum(1)
     println(val)
-    let res = loop()
-    return res
+    return loop()
 }
 
 let _ = loop()
-
-val = 0
-
 let _ = loop()
+
+
+
+

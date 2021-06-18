@@ -2,7 +2,7 @@ use std::any::Any;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::ast::ast_operations;
-use crate::ast::ast_operations::{FnCallBase, ResultExpressionBase};
+use crate::ast::ast_operations::{BoxedValue, FnCallBase, ResultExpressionBase};
 use crate::stack::{FunctionDef, Stack, VariableDef};
 use crate::types::{IndexedTokenList, Token, TokensList};
 use crate::utils::op_codes::Directions;
@@ -31,7 +31,7 @@ pub fn get_var_reference_fn(stack: &Mutex<Stack>, var_name: String) -> Result<Va
 }
 
 // Search functions in the stack by its name
-pub fn get_func_fn(fn_name: String, functions: Vec<FunctionDef>) -> Result<FunctionDef, ()> {
+pub fn get_func_fn(fn_name: String, functions: &Vec<FunctionDef>) -> Result<FunctionDef, ()> {
     for op_fn in functions {
         if op_fn.name == fn_name {
             return Ok(op_fn.clone());
@@ -89,31 +89,43 @@ pub fn get_assignment_token_fn(
     token_n: usize,
     tokens: TokensList,
     direction: Directions,
-) -> ast_operations::BoxedValue {
+) -> (usize, ast_operations::BoxedValue) {
     match val.as_str() {
         // True boolean
-        "true" => ast_operations::BoxedValue {
-            interface: op_codes::BOOLEAN,
-            value: Box::new(primitive_values::Boolean::new(true)),
-        },
+        "true" => (
+            1,
+            ast_operations::BoxedValue {
+                interface: op_codes::BOOLEAN,
+                value: Box::new(primitive_values::Boolean::new(true)),
+            },
+        ),
         // False boolean
-        "false" => ast_operations::BoxedValue {
-            interface: op_codes::BOOLEAN,
-            value: Box::new(primitive_values::Boolean::new(false)),
-        },
+        "false" => (
+            1,
+            ast_operations::BoxedValue {
+                interface: op_codes::BOOLEAN,
+                value: Box::new(primitive_values::Boolean::new(false)),
+            },
+        ),
         // Numeric values
-        val if val.parse::<usize>().is_ok() => ast_operations::BoxedValue {
-            interface: op_codes::NUMBER,
-            value: Box::new(primitive_values::Number::new(val.parse::<usize>().unwrap())),
-        },
+        val if val.parse::<usize>().is_ok() => (
+            1,
+            ast_operations::BoxedValue {
+                interface: op_codes::NUMBER,
+                value: Box::new(primitive_values::Number::new(val.parse::<usize>().unwrap())),
+            },
+        ),
         // String values
         val if val.chars().nth(0).unwrap() == '"'
             && val.chars().nth(val.len() - 1).unwrap() == '"' =>
         {
-            ast_operations::BoxedValue {
-                interface: op_codes::STRING,
-                value: Box::new(primitive_values::StringVal::new(String::from(val))),
-            }
+            (
+                1,
+                ast_operations::BoxedValue {
+                    interface: op_codes::STRING,
+                    value: Box::new(primitive_values::StringVal::new(String::from(val))),
+                },
+            )
         }
         // References to other values (ej: referencing to a variable)
         val => {
@@ -128,10 +140,23 @@ pub fn get_assignment_token_fn(
                 let reference_type = match next_token.ast_type {
                     op_codes::OPEN_PARENT => op_codes::FN_CALL,
                     op_codes::CLOSE_PARENT => op_codes::FN_CALL,
+                    op_codes::PROP_ACCESS => op_codes::PROP_ACCESS,
                     _ => 0,
                 };
 
                 match reference_type {
+                    op_codes::PROP_ACCESS => {
+                        let after_next_token = tokens[token_n + 2].clone();
+                        let (size, val) = get_assignment_token_fn(
+                            after_next_token.value.clone(),
+                            token_n + 2,
+                            tokens.clone(),
+                            Directions::LeftToRight,
+                        );
+
+                        (size + 2, val)
+                    }
+
                     op_codes::FN_CALL => {
                         // Position where it will be starting getting the argument tokens
                         let starting_token: usize = {
@@ -140,6 +165,8 @@ pub fn get_assignment_token_fn(
                                 _ => token_n,
                             }
                         };
+
+                        let previous_token = tokens[token_n - 1].clone();
 
                         // Get argument tokens
                         let mut arguments_tokens: Vec<(usize, Token)> = {
@@ -177,7 +204,12 @@ pub fn get_assignment_token_fn(
                                     }
                                 }
                             },
-                            String::new(),
+                            {
+                                match previous_token.ast_type {
+                                    op_codes::PROP_ACCESS => tokens[token_n - 2].value.clone(),
+                                    _ => String::new(),
+                                }
+                            },
                         );
 
                         // Transfrom the tokens into arguments
@@ -189,21 +221,30 @@ pub fn get_assignment_token_fn(
                                 .collect(),
                         );
 
-                        ast_operations::BoxedValue {
-                            interface: op_codes::FN_CALL,
-                            value: Box::new(ast_token.clone()),
-                        }
+                        (
+                            arguments_tokens.len() + 3,
+                            ast_operations::BoxedValue {
+                                interface: op_codes::FN_CALL,
+                                value: Box::new(ast_token.clone()),
+                            },
+                        )
                     }
-                    _ => ast_operations::BoxedValue {
+                    _ => (
+                        1,
+                        ast_operations::BoxedValue {
+                            interface: op_codes::REFERENCE,
+                            value: Box::new(primitive_values::Reference::new(String::from(val))),
+                        },
+                    ),
+                }
+            } else {
+                (
+                    1,
+                    ast_operations::BoxedValue {
                         interface: op_codes::REFERENCE,
                         value: Box::new(primitive_values::Reference::new(String::from(val))),
                     },
-                }
-            } else {
-                ast_operations::BoxedValue {
-                    interface: op_codes::REFERENCE,
-                    value: Box::new(primitive_values::Reference::new(String::from(val))),
-                }
+                )
             }
         }
     }
@@ -223,13 +264,6 @@ pub fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::
             op_codes::OPEN_PARENT => token_n += 1,
             op_codes::CLOSE_PARENT => token_n += 1,
             _ => {
-                let arguments_tokens: Vec<(usize, Token)> = get_tokens_from_to_fn(
-                    token_n,
-                    op_codes::CLOSE_PARENT,
-                    tokens.clone(),
-                    Directions::LeftToRight,
-                );
-
                 let assigned_token = get_assignment_token_fn(
                     token.value.clone(),
                     token_n,
@@ -237,12 +271,12 @@ pub fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::
                     Directions::LeftToRight,
                 );
 
-                match assigned_token.interface {
-                    op_codes::FN_CALL => token_n += arguments_tokens.len() + 1,
+                match assigned_token.1.interface {
+                    op_codes::FN_CALL => token_n += assigned_token.0 + 1,
                     _ => token_n += 1,
                 }
 
-                args.push(assigned_token);
+                args.push(assigned_token.1);
             }
         }
     }
@@ -281,8 +315,8 @@ pub fn convert_tokens_into_res_expressions(
 
                 exprs.push(ast_operations::ResultExpression::new(
                     op_codes::EQUAL_CONDITION,
-                    left_token.clone(),
-                    right_token.clone(),
+                    left_token.1.clone(),
+                    right_token.1.clone(),
                 ));
 
                 token_n += 2;
@@ -346,14 +380,27 @@ pub fn resolve_reference(
         }
         op_codes::FN_CALL => {
             let fn_call = downcast_val::<ast_operations::FnCall>(ref_val.as_self());
-            let ref_fn = get_func_fn(
-                fn_call.fn_name.clone(),
-                stack.lock().unwrap().functions.clone(),
-            );
+
+            let is_referenced = fn_call.reference_to != "";
+
+            let ref_fn = if is_referenced {
+                let ref_var = get_var_reference_fn(stack, fn_call.reference_to.clone());
+
+                get_func_fn(fn_call.fn_name.clone(), &ref_var.unwrap().methods)
+            } else {
+                get_func_fn(
+                    fn_call.fn_name.clone(),
+                    &stack.lock().unwrap().clone().get_functions(),
+                )
+            };
 
             // If the calling function is found
             if ref_fn.is_ok() {
                 let mut arguments = Vec::new();
+
+                if is_referenced {
+                    arguments.push(fn_call.reference_to.clone());
+                }
 
                 for argument in &fn_call.arguments {
                     let arg_ref =
@@ -410,6 +457,35 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> Vec<FunctionDef> {
         op_codes::NUMBER => {
             res.push(FunctionDef {
                 name: String::from("sum"),
+                body: vec![],
+                cb: |_, args, _, stack, _| {
+                    let var_name = args[0].clone();
+                    let num = args[1].clone();
+
+                    let var_ref = get_var_reference_fn(stack, var_name.clone());
+
+                    if var_ref.is_ok() {
+                        let var = var_ref.unwrap();
+                        let var_val = downcast_val::<Number>(var.value.as_self());
+                        let var_num = var_val.get_state();
+
+                        let new_num = num.parse::<usize>().unwrap();
+
+                        let var_new_val = Number::new(new_num + var_num);
+
+                        return Ok(BoxedValue {
+                            interface: op_codes::NUMBER,
+                            value: Box::new(var_new_val),
+                        });
+                    }
+
+                    Err(())
+                },
+                expr_id: "".to_string(),
+                arguments: vec![],
+            });
+            res.push(FunctionDef {
+                name: String::from("mut_sum"),
                 body: vec![],
                 cb: |_, args, _, stack, _| {
                     let var_name = args[0].clone();

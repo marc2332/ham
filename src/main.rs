@@ -34,14 +34,17 @@ fn main() {
             let contents =
                 fs::read_to_string(filename).expect("Something went wrong reading the file");
 
-            // Memory stack
-            let stack = Mutex::new(Stack::new());
-
             // Tokens
             let tokens = ham::get_tokens(contents);
 
+            // Global context
+            let global_context = ast::ast_operations::Expression::new();
+
+            // Memory stack
+            let stack = Mutex::new(Stack::new(global_context.expr_id.clone()));
+
             // Ast tree root
-            let tree = Mutex::new(ast::ast_operations::Expression::new());
+            let tree = Mutex::new(global_context);
 
             // Tree
             ham::move_tokens_into_ast(tokens, &tree);
@@ -52,8 +55,11 @@ fn main() {
         Some("repl") => {
             println!("{}", CLI_MSG);
 
+            // Global context
+            let global_context = ast::ast_operations::Expression::new();
+
             // Memory stack
-            let stack = Mutex::new(Stack::new());
+            let stack = Mutex::new(Stack::new(global_context.expr_id));
 
             let stdin = io::stdin();
 
