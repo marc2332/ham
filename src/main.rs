@@ -19,8 +19,13 @@ fn commands<'a>() -> ArgMatches<'a> {
     App::new("HAM Interpreter")
         .version("1.0")
         .author("Marc E. <mespinsanz@gmail.com>")
-        .subcommand(SubCommand::with_name("repl"))
-        .subcommand(SubCommand::with_name("run").arg(Arg::with_name("file")))
+        .subcommand(
+            SubCommand::with_name("repl")
+                .arg(Arg::with_name("show-ast-tree").help("Displays the AST Tree of the code.")),
+        )
+        .subcommand(
+            SubCommand::with_name("run").arg(Arg::with_name("file").help("Live code interpreter.")),
+        )
         .get_matches()
 }
 
@@ -48,6 +53,13 @@ fn main() {
 
             // Tree
             ham::move_tokens_into_ast(tokens, &tree);
+
+            if matches.is_present("show-ast-tree") {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&tree.lock().unwrap().clone()).unwrap()
+                );
+            }
 
             // Run (it will always return a Result<Err> because it doesn't return anything)
             ham::run_ast(&tree, &stack).err();

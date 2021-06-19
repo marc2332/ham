@@ -1,22 +1,24 @@
 
-let val = 0
-
+let value = 0
 
 fn loop(){
-    if val == 10 {
-        val = 0
-        return 0
+    if value == 15 {
+        value = 0
+        return value
     }
-
-    val.mut_sum(1)
-    val = val.sum(1)
-    println(val)
+    value.mut_sum(1)
+    println(value)
     return loop()
 }
 
 let _ = loop()
-let _ = loop()
 
+fn test(x){
+    return x
+}
 
+if 5 == test(5) {
+    print("yes")
+}
 
 

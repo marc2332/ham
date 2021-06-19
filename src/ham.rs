@@ -6,11 +6,12 @@ use crate::ast::ast_operations::{
 use crate::runtime::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, downcast_val,
     get_assignment_token_fn, get_func_fn, get_methods_in_type, get_tokens_from_to_fn,
-    get_var_reference_fn, modify_var, resolve_reference, value_to_string,
+    get_var_reference_fn, modify_var, resolve_reference, value_to_string, values_to_strings,
 };
 use crate::stack::{FunctionDef, Stack, VariableDef};
 use crate::types::{IndexedTokenList, LinesList, Token, TokensList};
 use crate::utils::op_codes::Directions;
+use crate::utils::primitive_values::StringVal;
 use crate::utils::{errors, op_codes, primitive_values};
 use regex::Regex;
 use std::sync::Mutex;
@@ -379,12 +380,11 @@ pub fn run_ast(
     let ast = ast.lock().unwrap();
 
     // Closure version of resolve_reference
-    let resolve_ref =
-        |val_type: op_codes::Val,
-         ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
-         -> Result<(op_codes::Val, Box<dyn primitive_values::PrimitiveValueBase>), ()> {
-            return resolve_reference(val_type, ref_val, stack, &ast);
-        };
+    let resolve_ref = |val_type: op_codes::Val,
+                       ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
+     -> Result<BoxedValue, ()> {
+        return resolve_reference(val_type, ref_val, stack, &ast);
+    };
 
     // Check if a conditional is true or not
     let eval_condition = |condition_code: op_codes::Val,
@@ -429,14 +429,7 @@ pub fn run_ast(
 
                 let ret_ref = resolve_ref(ret_type, ret_val);
 
-                if ret_ref.is_ok() {
-                    let (ref_type, ref_val) = ret_ref.unwrap();
-
-                    return Ok(BoxedValue {
-                        interface: ref_type,
-                        value: ref_val.clone(),
-                    });
-                }
+                return ret_ref;
             }
 
             /*
@@ -478,7 +471,7 @@ pub fn run_ast(
                     name: String::from(function.def_name.clone()),
                     body: function.body.clone(),
                     arguments: function.arguments.clone(),
-                    cb: |args, args_vals, body: Vec<Box<dyn self::AstBase>>, stack, _| {
+                    cb: |args, args_vals, body: Vec<Box<dyn self::AstBase>>, stack, ast| {
                         let expr = ast_operations::Expression::from_body(body.clone());
                         let expr_id = expr.expr_id.clone();
 
@@ -487,8 +480,8 @@ pub fn run_ast(
 
                             stack.lock().unwrap().variables.push(VariableDef {
                                 name: String::from(arg_name),
-                                value: Box::new(primitive_values::StringVal(String::from(arg))),
-                                val_type: op_codes::STRING,
+                                value: arg.value.clone(),
+                                val_type: arg.interface,
                                 expr_id: expr_id.clone(),
                                 methods: Vec::new(),
                             });
@@ -498,7 +491,18 @@ pub fn run_ast(
 
                         stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
 
-                        return return_val;
+                        if return_val.is_err() {
+                            return return_val;
+                        } else {
+                            let return_val = return_val.unwrap();
+
+                            return resolve_reference(
+                                return_val.interface,
+                                return_val.value,
+                                stack,
+                                &ast,
+                            );
+                        }
                     },
                     expr_id: ast.expr_id.clone(),
                 });
@@ -516,9 +520,9 @@ pub fn run_ast(
                 let var_ref = resolve_ref(val_type, ref_val);
 
                 if var_ref.is_ok() {
-                    let (ref_type, ref_val) = var_ref.unwrap();
+                    let reference = var_ref.unwrap();
 
-                    if !op_codes::is_valid(ref_type) {
+                    if !op_codes::is_valid(reference.interface) {
                         /*
                          * If value code is not valid then raise an error
                          */
@@ -529,10 +533,10 @@ pub fn run_ast(
                     } else {
                         stack.lock().unwrap().variables.push(VariableDef {
                             name: variable.def_name.clone(),
-                            val_type: ref_type,
-                            value: ref_val,
+                            val_type: reference.interface.clone(),
+                            value: reference.value,
                             expr_id: ast.expr_id.clone(),
-                            methods: get_methods_in_type(ref_type),
+                            methods: get_methods_in_type(reference.interface),
                         });
                     }
                 }
@@ -551,7 +555,7 @@ pub fn run_ast(
 
                 if ref_val.is_ok() {
                     let ref_val = ref_val.unwrap();
-                    modify_var(stack, variable.var_name.clone(), ref_val.1);
+                    modify_var(stack, variable.var_name.clone(), ref_val.value);
                 }
             }
 
@@ -565,7 +569,6 @@ pub fn run_ast(
 
                 let ref_fn = if is_referenced {
                     let ref_var = get_var_reference_fn(stack, fn_call.reference_to.clone());
-
                     get_func_fn(fn_call.fn_name.clone(), &ref_var.unwrap().methods)
                 } else {
                     get_func_fn(
@@ -579,7 +582,10 @@ pub fn run_ast(
                     let mut arguments = Vec::new();
 
                     if is_referenced {
-                        arguments.push(fn_call.reference_to.clone());
+                        arguments.push(BoxedValue {
+                            interface: op_codes::STRING,
+                            value: Box::new(StringVal(fn_call.reference_to.clone())),
+                        });
                     }
 
                     for argument in &fn_call.arguments {
@@ -588,16 +594,7 @@ pub fn run_ast(
                         if arg_ref.is_ok() {
                             let arg_ref = arg_ref.unwrap();
 
-                            let argument_stringified = value_to_string(arg_ref.clone());
-
-                            if argument_stringified.is_ok() {
-                                arguments.push(argument_stringified.unwrap());
-                            } else {
-                                errors::raise_error(
-                                    errors::BROKEN_ARGUMENT,
-                                    vec![argument.interface.to_string()],
-                                )
-                            }
+                            arguments.push(arg_ref);
                         }
                     }
 
@@ -609,7 +606,7 @@ pub fn run_ast(
                     if res_func.is_ok() {
                         let ret_val = res_func.unwrap();
 
-                        let val_stringified = value_to_string((ret_val.interface, ret_val.value));
+                        let val_stringified = value_to_string(ret_val);
 
                         if val_stringified.is_ok() {
                             let val_stringified = val_stringified.unwrap();
@@ -621,7 +618,7 @@ pub fn run_ast(
                                 vec![
                                     val_stringified,
                                     fn_call.fn_name.clone(),
-                                    arguments.join(" "),
+                                    values_to_strings(arguments).join(" "),
                                 ],
                             )
                         }

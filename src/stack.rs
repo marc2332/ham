@@ -1,5 +1,6 @@
 use crate::ast::ast_operations;
-use crate::ast::ast_operations::AstBase;
+use crate::ast::ast_operations::{AstBase, BoxedValue};
+use crate::runtime::values_to_strings;
 use crate::utils::{op_codes, primitive_values};
 use std::sync::{Mutex, MutexGuard};
 
@@ -24,7 +25,7 @@ pub struct FunctionDef {
     pub body: Vec<Box<dyn AstBase>>,
     pub cb: fn(
         args: Vec<String>,
-        args_vals: Vec<String>,
+        args_vals: Vec<BoxedValue>,
         body: Vec<Box<dyn AstBase>>,
         stack: &Mutex<Stack>,
         ast: &MutexGuard<ast_operations::Expression>,
@@ -54,7 +55,7 @@ impl Stack {
             body: vec![],
             arguments: vec![],
             cb: |_, args, _, _, _| {
-                print!("{}", args.join(""));
+                print!("{}", values_to_strings(args).join(" "));
                 return Err(());
             },
             expr_id: expr_id.clone(),
@@ -68,7 +69,7 @@ impl Stack {
             body: vec![],
             arguments: vec![],
             cb: |_, args, _, _, _| {
-                println!("{}", args.join(""));
+                println!("{}", values_to_strings(args).join(""));
                 return Err(());
             },
             expr_id: expr_id.clone(),

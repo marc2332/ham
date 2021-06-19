@@ -3,19 +3,24 @@ pub mod ast_operations {
     /* BASE */
     use crate::utils::primitive_values::PrimitiveValueBase;
     use crate::utils::{op_codes, primitive_values};
+
+    use erased_serde::serialize_trait_object;
+    use serde::Serialize;
+
     use std::any::Any;
     use uuid::Uuid;
 
-    pub trait AstBase: dyn_clone::DynClone {
+    pub trait AstBase: dyn_clone::DynClone + erased_serde::Serialize + std::fmt::Debug {
         fn get_type(&self) -> op_codes::Val;
         fn as_self(&self) -> &dyn Any;
     }
 
     dyn_clone::clone_trait_object!(AstBase);
+    serialize_trait_object!(AstBase);
 
     /* RETURN STATEMENT */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct ReturnStatement {
         pub value: BoxedValue,
     }
@@ -34,7 +39,7 @@ pub mod ast_operations {
         fn new(relation: op_codes::Val, left: BoxedValue, right: BoxedValue) -> Self;
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct ResultExpression {
         pub left: BoxedValue,
         pub relation: op_codes::Val,
@@ -65,7 +70,7 @@ pub mod ast_operations {
         fn new(conditions: Vec<ResultExpression>, body: Vec<Box<dyn self::AstBase>>) -> Self;
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct IfConditional {
         pub conditions: Vec<ResultExpression>,
         pub body: Vec<Box<dyn self::AstBase>>,
@@ -96,7 +101,7 @@ pub mod ast_operations {
             -> Self;
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct FnDefinition {
         pub def_name: String,
         pub body: Vec<Box<dyn self::AstBase>>,
@@ -135,7 +140,7 @@ pub mod ast_operations {
         fn new(def_name: String, assignment: BoxedValue) -> Self;
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct VarDefinition {
         pub def_name: String,
         pub assignment: BoxedValue,
@@ -168,7 +173,7 @@ pub mod ast_operations {
         fn new(var_name: String, assignment: BoxedValue) -> Self;
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct VarAssignment {
         pub var_name: String,
         pub assignment: BoxedValue,
@@ -197,7 +202,7 @@ pub mod ast_operations {
 
     /* BOXED VALUE */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct BoxedValue {
         pub interface: op_codes::Val,
         pub value: Box<dyn primitive_values::PrimitiveValueBase>,
@@ -220,7 +225,7 @@ pub mod ast_operations {
 
     /* EXPRESSION  */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Expression {
         pub body: Vec<Box<dyn self::AstBase>>,
         pub token_type: op_codes::Val,
@@ -260,7 +265,7 @@ pub mod ast_operations {
 
     /* FUNCTION CALL  */
 
-    #[derive(Clone)]
+    #[derive(Clone, Serialize, Debug)]
     pub struct FnCall {
         pub token_type: op_codes::Val,
         pub fn_name: String,

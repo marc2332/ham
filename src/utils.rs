@@ -46,13 +46,18 @@ pub mod op_codes {
 }
 
 pub mod primitive_values {
+    use erased_serde::serialize_trait_object;
+    use serde::Serialize;
     use std::any::Any;
 
-    pub trait PrimitiveValueBase: dyn_clone::DynClone {
+    pub trait PrimitiveValueBase:
+        dyn_clone::DynClone + erased_serde::Serialize + std::fmt::Debug
+    {
         fn as_self(&self) -> &dyn Any;
     }
 
     dyn_clone::clone_trait_object!(PrimitiveValueBase);
+    serialize_trait_object!(PrimitiveValueBase);
 
     /*
      * Reference
@@ -62,7 +67,7 @@ pub mod primitive_values {
      *
      */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Reference(pub String);
 
     // Implement base methods for REFERENCE
@@ -87,7 +92,7 @@ pub mod primitive_values {
      * String
      */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct StringVal(pub String);
 
     // Implement base methods for String
@@ -117,7 +122,7 @@ pub mod primitive_values {
      * Number
      */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Number(pub usize);
 
     // Implement base methods for Number
@@ -147,7 +152,7 @@ pub mod primitive_values {
      * Boolean
      */
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug, Serialize)]
     pub struct Boolean(pub bool);
 
     // Implement base methods for Boolean
