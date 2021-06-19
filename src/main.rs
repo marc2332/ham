@@ -7,7 +7,7 @@ mod utils;
 
 use crate::ast::ast_operations::ExpressionBase;
 use crate::stack::Stack;
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{App, Arg, ArgMatches};
 use std::fs;
 use std::io;
 use std::io::BufRead;
@@ -15,16 +15,25 @@ use std::sync::Mutex;
 
 static CLI_MSG: &str = ":: Welcome to HAM REPL :: \n";
 
-fn commands<'a>() -> ArgMatches<'a> {
+fn commands<'a>() -> ArgMatches {
     App::new("HAM Interpreter")
         .version("1.0")
         .author("Marc E. <mespinsanz@gmail.com>")
+        .subcommand(App::new("repl"))
         .subcommand(
-            SubCommand::with_name("repl")
-                .arg(Arg::with_name("show-ast-tree").help("Displays the AST Tree of the code.")),
-        )
-        .subcommand(
-            SubCommand::with_name("run").arg(Arg::with_name("file").help("Live code interpreter.")),
+            App::new("run")
+                .arg(
+                    Arg::new("file")
+                        .about("Live code interpreter.")
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("show_ast_tree")
+                        .about("Displays the AST Tree of the code.")
+                        .takes_value(false)
+                        .short('t')
+                        .long("show-ast-tree"),
+                ),
         )
         .get_matches()
 }
@@ -32,9 +41,9 @@ fn commands<'a>() -> ArgMatches<'a> {
 fn main() {
     let matches = commands();
 
-    match matches.subcommand_name() {
-        Some("run") => {
-            let filename = matches.subcommand().1.unwrap().value_of("file").unwrap();
+    match matches.subcommand() {
+        Some(("run", run_matches)) => {
+            let filename = run_matches.value_of("file").unwrap();
 
             let contents =
                 fs::read_to_string(filename).expect("Something went wrong reading the file");
@@ -54,7 +63,7 @@ fn main() {
             // Tree
             ham::move_tokens_into_ast(tokens, &tree);
 
-            if matches.is_present("show-ast-tree") {
+            if run_matches.is_present("show_ast_tree") {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&tree.lock().unwrap().clone()).unwrap()
@@ -64,7 +73,7 @@ fn main() {
             // Run (it will always return a Result<Err> because it doesn't return anything)
             ham::run_ast(&tree, &stack).err();
         }
-        Some("repl") => {
+        Some(("repl", _)) => {
             println!("{}", CLI_MSG);
 
             // Global context
@@ -90,7 +99,7 @@ fn main() {
                 ham::move_tokens_into_ast(tokens, &tree);
 
                 // Run (it will always return a Result<Err> because it doesn't return anything)
-                ham::run_ast(&tree, &stack).unwrap();
+                ham::run_ast(&tree, &stack).err();
 
                 println!("  <- ");
 

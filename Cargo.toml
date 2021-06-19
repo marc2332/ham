@@ -7,7 +7,7 @@ authors = ["Marc Espín"]
 [dependencies]
 regex = { version = "1",  features = ["pattern"] }
 dyn-clone = "1.0.4"
-clap = "2.33.3"
+clap = "3.0.0-beta.2"
 uuid = { version = "0.8", features = ["v4"] }
 serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.64"
