@@ -101,7 +101,7 @@ pub fn get_assignment_token_fn(
                 1,
                 ast_operations::BoxedValue {
                     interface: op_codes::STRING,
-                    value: Box::new(primitive_values::StringVal::new(String::from(val))),
+                    value: Box::new(primitive_values::StringVal::new(val.replace('"', ""))),
                 },
             )
         }
@@ -244,6 +244,7 @@ pub fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::
             // Ignore ( and )
             op_codes::OPEN_PARENT => token_n += 1,
             op_codes::CLOSE_PARENT => token_n += 1,
+            op_codes::COMMA_DELIMITER => token_n += 1,
             _ => {
                 let assigned_token = get_assignment_token_fn(
                     token.value.clone(),

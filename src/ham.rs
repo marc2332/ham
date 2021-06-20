@@ -47,7 +47,7 @@ fn get_lines(code: String) -> LinesList {
         let line = String::from(line);
         let mut line_ast = Vec::new();
 
-        let re = Regex::new(r"[\s+,.:]|([()])").unwrap();
+        let re = Regex::new(r#"([\s+,.:])|("(.*?)")|([()])"#).unwrap();
 
         // Every detected word
         for word in split(&re, &line) {
@@ -84,6 +84,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "==" => op_codes::EQUAL_CONDITION,
                 "return" => op_codes::RETURN,
                 "." => op_codes::PROP_ACCESS,
+                "," => op_codes::COMMA_DELIMITER,
                 _ => op_codes::REFERENCE,
             };
 

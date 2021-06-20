@@ -1,6 +1,7 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{AstBase, BoxedValue};
 use crate::runtime::{value_to_string, values_to_strings};
+use crate::utils::primitive_values::StringVal;
 use crate::utils::{errors, op_codes, primitive_values};
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
@@ -84,6 +85,35 @@ impl FunctionsContainer for Stack {
 impl Stack {
     pub fn new(expr_id: String) -> Stack {
         let mut functions = HashMap::new();
+
+        /*
+         * format() function
+         */
+        functions.insert(
+            "format".to_string(),
+            FunctionDef {
+                name: "format".to_string(),
+                body: vec![],
+                arguments: vec![],
+                cb: |_, args, _, _, _| {
+                    let mut args = values_to_strings(args);
+
+                    let mut template = args[0].clone();
+
+                    args.remove(0);
+
+                    for arg in args {
+                        template = template.replacen("{}", arg.as_str(), 1);
+                    }
+
+                    Some(BoxedValue {
+                        interface: op_codes::STRING,
+                        value: Box::new(StringVal(template)),
+                    })
+                },
+                expr_id: expr_id.clone(),
+            },
+        );
 
         /*
          * print() function
