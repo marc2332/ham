@@ -270,6 +270,9 @@ pub mod ast_operations {
         pub token_type: op_codes::Val,
         pub fn_name: String,
         pub arguments: Vec<BoxedValue>,
+        /*
+         * TODO: Use Option
+         */
         pub reference_to: String,
     }
 

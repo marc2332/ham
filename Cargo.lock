@@ -107,7 +107,6 @@ dependencies = [
  "erased-serde",
  "regex",
  "serde",
- "serde_derive",
  "serde_json",
  "uuid",
 ]

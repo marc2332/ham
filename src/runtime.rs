@@ -12,11 +12,16 @@ use crate::utils::primitive_values::{
 use crate::utils::{op_codes, primitive_values};
 use std::collections::HashMap;
 
+/*
+ * Shorthand and *unsafe* way to downcast values
+ */
 pub fn downcast_val<T: 'static>(val: &dyn Any) -> &T {
     val.downcast_ref::<T>().unwrap()
 }
 
-// Get tokens with index starting on `from` until a token matches its type to `to`
+/*
+ * Get tokens with index starting on `from` until a token matches its type to `to`
+ */
 pub fn get_tokens_from_to_fn(
     from: usize,
     to: op_codes::Val,
@@ -231,7 +236,9 @@ pub fn get_assignment_token_fn(
     }
 }
 
-// Get function arguments
+/*
+ * Convert some tokens into function arguments
+ */
 pub fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::BoxedValue> {
     let mut args = Vec::new();
 
@@ -241,7 +248,7 @@ pub fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::
         let token = tokens[token_n].clone();
 
         match token.ast_type {
-            // Ignore ( and )
+            // Ignore ( ) and ,
             op_codes::OPEN_PARENT => token_n += 1,
             op_codes::CLOSE_PARENT => token_n += 1,
             op_codes::COMMA_DELIMITER => token_n += 1,
@@ -266,6 +273,9 @@ pub fn convert_tokens_into_arguments(tokens: TokensList) -> Vec<ast_operations::
     args
 }
 
+/*
+ * Convert some tokens into a list of boolean expressions
+ */
 pub fn convert_tokens_into_res_expressions(
     tokens: TokensList,
 ) -> Vec<ast_operations::ResultExpression> {
