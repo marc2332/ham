@@ -3,46 +3,17 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{BoxedValue, FnCallBase, ResultExpressionBase};
-use crate::stack::{FunctionDef, Stack, VariableDef};
+use crate::stack::{FunctionDef, FunctionsContainer, Stack};
 use crate::types::{IndexedTokenList, Token, TokensList};
 use crate::utils::op_codes::Directions;
 use crate::utils::primitive_values::{
     BooleanValueBase, Number, NumberValueBase, ReferenceValueBase, StringVal, StringValueBase,
 };
-use crate::utils::{errors, op_codes, primitive_values};
+use crate::utils::{op_codes, primitive_values};
+use std::collections::HashMap;
 
 pub fn downcast_val<T: 'static>(val: &dyn Any) -> &T {
     val.downcast_ref::<T>().unwrap()
-}
-
-/*
- * Search variables in the stack by its name
- *
- * IDEA: deprecate referencing variables by it's name but instead use a uuid
- */
-pub fn get_var_reference_fn(stack: &Mutex<Stack>, var_name: String) -> Result<VariableDef, ()> {
-    let stack = stack.lock().unwrap();
-
-    for op_var in &stack.variables {
-        if op_var.name == var_name {
-            return Ok(op_var.clone());
-        }
-    }
-
-    errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
-    Err(())
-}
-
-// Search functions in the stack by its name
-pub fn get_func_fn(fn_name: String, functions: &Vec<FunctionDef>) -> Result<FunctionDef, ()> {
-    for op_fn in functions {
-        if op_fn.name == fn_name {
-            return Ok(op_fn.clone());
-        }
-    }
-
-    errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.clone()]);
-    Err(())
 }
 
 // Get tokens with index starting on `from` until a token matches its type to `to`
@@ -54,6 +25,7 @@ pub fn get_tokens_from_to_fn(
 ) -> IndexedTokenList {
     let mut found_tokens = Vec::new();
 
+    // Init token position
     let mut token_n = from;
 
     match direction {
@@ -172,8 +144,6 @@ pub fn get_assignment_token_fn(
                             }
                         };
 
-                        let previous_token = tokens[token_n - 1].clone();
-
                         // Get argument tokens
                         let mut arguments_tokens: Vec<(usize, Token)> = {
                             match direction {
@@ -211,9 +181,14 @@ pub fn get_assignment_token_fn(
                                 }
                             },
                             {
-                                match previous_token.ast_type {
-                                    op_codes::PROP_ACCESS => tokens[token_n - 2].value.clone(),
-                                    _ => String::new(),
+                                if token_n > 0 {
+                                    let previous_token = tokens[token_n - 1].clone();
+                                    match previous_token.ast_type {
+                                        op_codes::PROP_ACCESS => tokens[token_n - 2].value.clone(),
+                                        _ => String::new(),
+                                    }
+                                } else {
+                                    String::new()
                                 }
                             },
                         );
@@ -371,25 +346,110 @@ pub fn values_to_strings(values: Vec<BoxedValue>) -> Vec<String> {
 }
 
 /*
+ * Returns the methods for the specified primitive type
+ */
+pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionDef> {
+    let mut res = HashMap::new();
+
+    match val_type {
+        op_codes::NUMBER => {
+            /*
+             * function: sum()
+             *
+             * Returns the variable value plus the argument
+             */
+            res.insert(
+                "sum".to_string(),
+                FunctionDef {
+                    name: String::from("sum"),
+                    body: vec![],
+                    cb: |_, args, _, stack, _| {
+                        let var_name = value_to_string(args[0].clone()).unwrap();
+                        let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
+
+                        let var_ref = stack.lock().unwrap().get_variable(var_name.as_str());
+
+                        if var_ref.is_ok() {
+                            let current_var = var_ref.unwrap();
+                            let current_var = downcast_val::<Number>(current_var.value.as_self());
+                            let current_val = current_var.get_state();
+
+                            let new_val = Number::new(current_val + new_val);
+
+                            return Some(BoxedValue {
+                                interface: op_codes::NUMBER,
+                                value: Box::new(new_val),
+                            });
+                        }
+
+                        None
+                    },
+                    expr_id: "".to_string(),
+                    arguments: vec![],
+                },
+            );
+            /*
+             * function: mut_sum()
+             *
+             * Assigns to the variable value it's value plus the argument
+             */
+            res.insert(
+                "mut_sum".to_string(),
+                FunctionDef {
+                    name: String::from("mut_sum"),
+                    body: vec![],
+                    cb: |_, args, _, stack, _| {
+                        let var_name = value_to_string(args[0].clone()).unwrap();
+                        let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
+
+                        let var_ref = stack.lock().unwrap().get_variable(var_name.as_str());
+
+                        if var_ref.is_ok() {
+                            let current_var = var_ref.unwrap();
+                            let current_val = downcast_val::<Number>(current_var.value.as_self());
+                            let current_num = current_val.get_state();
+
+                            let new_val = Number::new(current_num + new_val);
+
+                            stack
+                                .lock()
+                                .unwrap()
+                                .modify_var(var_name, Box::new(new_val));
+                        }
+
+                        None
+                    },
+                    expr_id: "".to_string(),
+                    arguments: vec![],
+                },
+            );
+        }
+        _ => (),
+    }
+
+    res
+}
+
+/*
  * For static values it will just return the input but for references it will resolve its value
  * and then return it
  */
 pub fn resolve_reference(
+    stack: &Mutex<Stack>,
     val_type: op_codes::Val,
     ref_val: Box<dyn primitive_values::PrimitiveValueBase>,
-    stack: &Mutex<Stack>,
     ast: &MutexGuard<ast_operations::Expression>,
-) -> Result<BoxedValue, ()> {
+) -> Option<BoxedValue> {
     match val_type {
-        op_codes::STRING => Ok(BoxedValue {
+        op_codes::STRING => Some(BoxedValue {
             interface: val_type,
             value: ref_val,
         }),
-        op_codes::BOOLEAN => Ok(BoxedValue {
+        op_codes::BOOLEAN => Some(BoxedValue {
             interface: val_type,
             value: ref_val,
         }),
-        op_codes::NUMBER => Ok(BoxedValue {
+        op_codes::NUMBER => Some(BoxedValue {
             interface: val_type,
             value: ref_val,
         }),
@@ -398,16 +458,16 @@ pub fn resolve_reference(
                 .0
                 .clone();
 
-            let ref_def = get_var_reference_fn(stack, val);
+            let variable = stack.lock().unwrap().get_variable(val.as_str());
 
-            if ref_def.is_ok() {
-                let ref_assign = ref_def.unwrap();
-                Ok(BoxedValue {
-                    interface: ref_assign.val_type,
-                    value: ref_assign.value,
+            if variable.is_ok() {
+                let variable = variable.unwrap();
+                Some(BoxedValue {
+                    interface: variable.val_type,
+                    value: variable.value,
                 })
             } else {
-                Err(())
+                None
             }
         }
         op_codes::FN_CALL => {
@@ -415,18 +475,20 @@ pub fn resolve_reference(
 
             let is_referenced = fn_call.reference_to != "";
 
-            let ref_fn = if is_referenced {
-                let ref_var = get_var_reference_fn(stack, fn_call.reference_to.clone());
-                get_func_fn(fn_call.fn_name.clone(), &ref_var.unwrap().methods)
+            let function = if is_referenced {
+                let variable = stack
+                    .lock()
+                    .unwrap()
+                    .get_variable(fn_call.reference_to.as_str());
+
+                variable.unwrap().get_function(fn_call.fn_name.as_str())
             } else {
-                get_func_fn(
-                    fn_call.fn_name.clone(),
-                    &stack.lock().unwrap().clone().get_functions(),
-                )
+                stack.lock().unwrap().get_function(fn_call.fn_name.as_str())
             };
 
             // If the calling function is found
-            if ref_fn.is_ok() {
+            if function.is_ok() {
+                let function = function.unwrap();
                 let mut arguments = Vec::new();
 
                 if is_referenced {
@@ -438,110 +500,19 @@ pub fn resolve_reference(
 
                 for argument in &fn_call.arguments {
                     let arg_ref =
-                        resolve_reference(argument.interface, argument.value.clone(), stack, &ast);
+                        resolve_reference(stack, argument.interface, argument.value.clone(), &ast);
 
-                    if arg_ref.is_ok() {
+                    if arg_ref.is_some() {
                         arguments.push(arg_ref.unwrap());
                     }
                 }
-
-                if ref_fn.is_ok() {
-                    let func = ref_fn.unwrap();
-                    let return_val = (func.cb)(func.arguments, arguments, func.body, &stack, &ast);
-                    return return_val;
-                } else {
-                    Err(())
-                }
+                let function_result =
+                    (function.cb)(function.arguments, arguments, function.body, &stack, &ast);
+                return function_result;
             } else {
-                Err(())
+                None
             }
         }
-        _ => Err(()),
+        _ => None,
     }
-}
-
-/*
- * Modify a variable value
- */
-pub fn modify_var(
-    stack: &Mutex<Stack>,
-    var_name: String,
-    value: Box<dyn primitive_values::PrimitiveValueBase>,
-) {
-    let mut stack = stack.lock().unwrap();
-
-    for mut op_var in stack.variables.iter_mut() {
-        if op_var.name == var_name {
-            op_var.value = value.clone();
-            return ();
-        }
-    }
-
-    errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
-}
-
-/*
- * Returns the methods for the specified primitive type
- */
-pub fn get_methods_in_type(val_type: op_codes::Val) -> Vec<FunctionDef> {
-    let mut res = Vec::new();
-
-    match val_type {
-        op_codes::NUMBER => {
-            res.push(FunctionDef {
-                name: String::from("sum"),
-                body: vec![],
-                cb: |_, args, _, stack, _| {
-                    let var_name = value_to_string(args[0].clone()).unwrap();
-                    let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
-
-                    let var_ref = get_var_reference_fn(stack, var_name.clone());
-
-                    if var_ref.is_ok() {
-                        let current_var = var_ref.unwrap();
-                        let current_var = downcast_val::<Number>(current_var.value.as_self());
-                        let current_val = current_var.get_state();
-
-                        let new_val = Number::new(current_val + new_val);
-
-                        return Ok(BoxedValue {
-                            interface: op_codes::NUMBER,
-                            value: Box::new(new_val),
-                        });
-                    }
-
-                    Err(())
-                },
-                expr_id: "".to_string(),
-                arguments: vec![],
-            });
-            res.push(FunctionDef {
-                name: String::from("mut_sum"),
-                body: vec![],
-                cb: |_, args, _, stack, _| {
-                    let var_name = value_to_string(args[0].clone()).unwrap();
-                    let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
-
-                    let var_ref = get_var_reference_fn(stack, var_name.clone());
-
-                    if var_ref.is_ok() {
-                        let current_var = var_ref.unwrap();
-                        let current_val = downcast_val::<Number>(current_var.value.as_self());
-                        let current_num = current_val.get_state();
-
-                        let new_val = Number::new(current_num + new_val);
-
-                        modify_var(stack, var_name, Box::new(new_val));
-                    }
-
-                    Err(())
-                },
-                expr_id: "".to_string(),
-                arguments: vec![],
-            });
-        }
-        _ => (),
-    }
-
-    res
 }

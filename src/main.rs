@@ -71,7 +71,7 @@ fn main() {
             }
 
             // Run (it will always return a Result<Err> because it doesn't return anything)
-            ham::run_ast(&tree, &stack).err();
+            ham::run_ast(&tree, &stack);
         }
         Some(("repl", _)) => {
             println!("{}", CLI_MSG);
@@ -99,7 +99,7 @@ fn main() {
                 ham::move_tokens_into_ast(tokens, &tree);
 
                 // Run (it will always return a Result<Err> because it doesn't return anything)
-                ham::run_ast(&tree, &stack).err();
+                ham::run_ast(&tree, &stack);
 
                 println!("  <- ");
 

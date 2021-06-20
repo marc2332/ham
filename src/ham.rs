@@ -5,10 +5,10 @@ use crate::ast::ast_operations::{
 };
 use crate::runtime::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, downcast_val,
-    get_assignment_token_fn, get_func_fn, get_methods_in_type, get_tokens_from_to_fn,
-    get_var_reference_fn, modify_var, resolve_reference, value_to_string, values_to_strings,
+    get_assignment_token_fn, get_methods_in_type, get_tokens_from_to_fn, resolve_reference,
+    value_to_string, values_to_strings,
 };
-use crate::stack::{FunctionDef, Stack, VariableDef};
+use crate::stack::{FunctionDef, FunctionsContainer, Stack, VariableDef};
 use crate::types::{IndexedTokenList, LinesList, Token, TokensList};
 use crate::utils::op_codes::Directions;
 use crate::utils::primitive_values::StringVal;
@@ -376,14 +376,14 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
 pub fn run_ast(
     ast: &Mutex<ast_operations::Expression>,
     stack: &Mutex<Stack>,
-) -> Result<ast_operations::BoxedValue, ()> {
+) -> Option<ast_operations::BoxedValue> {
     let ast = ast.lock().unwrap();
 
     // Closure version of resolve_reference
     let resolve_ref = |val_type: op_codes::Val,
                        ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
-     -> Result<BoxedValue, ()> {
-        return resolve_reference(val_type, ref_val, stack, &ast);
+     -> Option<BoxedValue> {
+        return resolve_reference(stack, val_type, ref_val, &ast);
     };
 
     // Check if a conditional is true or not
@@ -394,7 +394,7 @@ pub fn run_ast(
         let left_val = resolve_ref(left_val.interface.clone(), left_val.value.clone());
         let right_val = resolve_ref(right_val.interface.clone(), right_val.value.clone());
 
-        if left_val.is_ok() && right_val.is_ok() {
+        if left_val.is_some() && right_val.is_some() {
             let left_val = left_val.unwrap();
             let right_val = right_val.unwrap();
 
@@ -416,28 +416,38 @@ pub fn run_ast(
         }
     };
 
-    for op in &ast.body {
-        match op.get_type() {
+    for operation in &ast.body {
+        match operation.get_type() {
             /*
              * Handle return statements
              */
             op_codes::RETURN => {
-                let statement = downcast_val::<ast_operations::ReturnStatement>(op.as_self());
+                let statement =
+                    downcast_val::<ast_operations::ReturnStatement>(operation.as_self());
 
-                let ret_type = statement.value.interface;
-                let ret_val = statement.value.value.clone();
+                // Type of return
+                let return_type = statement.value.interface;
 
-                let ret_ref = resolve_ref(ret_type, ret_val);
+                // Value returning
+                let return_val = statement.value.value.clone();
 
-                return ret_ref;
+                // Pimitive value to return
+                let return_val = resolve_ref(return_type, return_val);
+
+                return return_val;
             }
 
             /*
              * Handle if statements
              */
             op_codes::IF_CONDITIONAL => {
-                let if_statement = downcast_val::<ast_operations::IfConditional>(op.as_self());
+                let if_statement =
+                    downcast_val::<ast_operations::IfConditional>(operation.as_self());
 
+                /*
+                 * Evaluate all conditions,
+                 * If all they return true then execute the IF's expression block
+                 */
                 let mut true_count = 0;
 
                 for condition in if_statement.conditions.clone() {
@@ -451,12 +461,14 @@ pub fn run_ast(
                     let expr = ast_operations::Expression::from_body(if_statement.body.clone());
                     let expr_id = expr.expr_id.clone();
 
+                    // Execute the expression block
                     let if_block_return = run_ast(&Mutex::new(expr), stack);
 
-                    if if_block_return.is_ok() {
-                        return Ok(if_block_return.unwrap());
+                    if if_block_return.is_some() {
+                        return Some(if_block_return.unwrap());
                     }
 
+                    // Clean the expression definitions from the stack
                     stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
                 }
             }
@@ -465,7 +477,7 @@ pub fn run_ast(
              * Handle function definitions
              */
             op_codes::FN_DEF => {
-                let function = downcast_val::<ast_operations::FnDefinition>(op.as_self());
+                let function = downcast_val::<ast_operations::FnDefinition>(operation.as_self());
 
                 stack.lock().unwrap().push_function(FunctionDef {
                     name: String::from(function.def_name.clone()),
@@ -478,28 +490,31 @@ pub fn run_ast(
                         for (i, arg) in args_vals.clone().iter().enumerate() {
                             let arg_name = args[i].clone();
 
-                            stack.lock().unwrap().variables.push(VariableDef {
-                                name: String::from(arg_name),
-                                value: arg.value.clone(),
-                                val_type: arg.interface,
-                                expr_id: expr_id.clone(),
-                                methods: Vec::new(),
-                            });
+                            stack.lock().unwrap().variables.insert(
+                                arg_name.clone(),
+                                VariableDef {
+                                    name: arg_name,
+                                    value: arg.value.clone(),
+                                    val_type: arg.interface.clone(),
+                                    expr_id: expr_id.clone(),
+                                    functions: get_methods_in_type(arg.interface),
+                                },
+                            );
                         }
 
                         let return_val = run_ast(&Mutex::new(expr), stack);
 
                         stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
 
-                        if return_val.is_err() {
+                        if return_val.is_some() {
                             return return_val;
                         } else {
                             let return_val = return_val.unwrap();
 
                             return resolve_reference(
+                                stack,
                                 return_val.interface,
                                 return_val.value,
-                                stack,
                                 &ast,
                             );
                         }
@@ -512,14 +527,14 @@ pub fn run_ast(
              * Handle variables definitions
              */
             op_codes::VAR_DEF => {
-                let variable = downcast_val::<ast_operations::VarDefinition>(op.as_self());
+                let variable = downcast_val::<ast_operations::VarDefinition>(operation.as_self());
 
                 let val_type = variable.assignment.interface;
                 let ref_val = variable.assignment.value.clone();
 
                 let var_ref = resolve_ref(val_type, ref_val);
 
-                if var_ref.is_ok() {
+                if var_ref.is_some() {
                     let reference = var_ref.unwrap();
 
                     if !op_codes::is_valid(reference.interface) {
@@ -531,13 +546,16 @@ pub fn run_ast(
                             vec![val_type.to_string()],
                         )
                     } else {
-                        stack.lock().unwrap().variables.push(VariableDef {
-                            name: variable.def_name.clone(),
-                            val_type: reference.interface.clone(),
-                            value: reference.value,
-                            expr_id: ast.expr_id.clone(),
-                            methods: get_methods_in_type(reference.interface),
-                        });
+                        stack.lock().unwrap().variables.insert(
+                            variable.def_name.clone(),
+                            VariableDef {
+                                name: variable.def_name.clone(),
+                                val_type: reference.interface.clone(),
+                                value: reference.value,
+                                expr_id: ast.expr_id.clone(),
+                                functions: get_methods_in_type(reference.interface),
+                            },
+                        );
                     }
                 }
             }
@@ -546,16 +564,19 @@ pub fn run_ast(
              * Handle variable assignments
              */
             op_codes::VAR_ASSIGN => {
-                let variable = downcast_val::<ast_operations::VarAssignment>(op.as_self());
+                let variable = downcast_val::<ast_operations::VarAssignment>(operation.as_self());
 
                 let ref_val = resolve_ref(
                     variable.assignment.interface,
                     variable.assignment.value.clone(),
                 );
 
-                if ref_val.is_ok() {
+                if ref_val.is_some() {
                     let ref_val = ref_val.unwrap();
-                    modify_var(stack, variable.var_name.clone(), ref_val.value);
+                    stack
+                        .lock()
+                        .unwrap()
+                        .modify_var(variable.var_name.clone(), ref_val.value);
                 }
             }
 
@@ -563,22 +584,23 @@ pub fn run_ast(
              * Handle function calls
              */
             op_codes::FN_CALL => {
-                let fn_call = downcast_val::<ast_operations::FnCall>(op.as_self());
+                let fn_call = downcast_val::<ast_operations::FnCall>(operation.as_self());
 
                 let is_referenced = fn_call.reference_to != "";
 
-                let ref_fn = if is_referenced {
-                    let ref_var = get_var_reference_fn(stack, fn_call.reference_to.clone());
-                    get_func_fn(fn_call.fn_name.clone(), &ref_var.unwrap().methods)
+                let function = if is_referenced {
+                    let variable = stack
+                        .lock()
+                        .unwrap()
+                        .get_variable(fn_call.reference_to.as_str());
+                    variable.unwrap().get_function(fn_call.fn_name.as_str())
                 } else {
-                    get_func_fn(
-                        fn_call.fn_name.clone(),
-                        &stack.lock().unwrap().clone().get_functions(),
-                    )
+                    stack.lock().unwrap().get_function(fn_call.fn_name.as_str())
                 };
 
                 // If the calling function is found
-                if ref_fn.is_ok() {
+                if function.is_ok() {
+                    let function = function.unwrap();
                     let mut arguments = Vec::new();
 
                     if is_referenced {
@@ -590,20 +612,21 @@ pub fn run_ast(
 
                     for argument in &fn_call.arguments {
                         let arg_ref = resolve_ref(argument.interface, argument.value.clone());
-
-                        if arg_ref.is_ok() {
+                        if arg_ref.is_some() {
                             let arg_ref = arg_ref.unwrap();
-
                             arguments.push(arg_ref);
                         }
                     }
 
-                    let func = ref_fn.unwrap();
+                    let res_func = (function.cb)(
+                        function.arguments,
+                        arguments.clone(),
+                        function.body,
+                        &stack,
+                        &ast,
+                    );
 
-                    let res_func =
-                        (func.cb)(func.arguments, arguments.clone(), func.body, &stack, &ast);
-
-                    if res_func.is_ok() {
+                    if res_func.is_some() {
                         let ret_val = res_func.unwrap();
 
                         let val_stringified = value_to_string(ret_val);
@@ -632,5 +655,5 @@ pub fn run_ast(
             }
         }
     }
-    Err(())
+    None
 }
