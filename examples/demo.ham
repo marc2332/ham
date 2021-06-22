@@ -8,4 +8,3 @@ fn test(x){
 
 let _ = test(0)
 
-println(format("{} = {}", 5, 5))

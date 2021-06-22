@@ -98,7 +98,7 @@ pub mod ast_operations {
     pub trait FnDefinitionBase {
         fn get_def_name(&self) -> String;
         fn new(def_name: String, body: Vec<Box<dyn self::AstBase>>, arguments: Vec<String>)
-            -> Self;
+               -> Self;
     }
 
     #[derive(Clone, Debug, Serialize)]
