@@ -8,12 +8,9 @@ mod utils;
 use crate::ast::ast_operations::ExpressionBase;
 use crate::stack::Stack;
 use clap::{App, Arg, ArgMatches};
+use question::Question;
 use std::fs;
-use std::io;
-use std::io::BufRead;
 use std::sync::Mutex;
-
-static CLI_MSG: &str = ":: Welcome to HAM REPL :: \n";
 
 fn commands<'a>() -> ArgMatches {
     App::new("HAM Interpreter")
@@ -32,6 +29,45 @@ fn commands<'a>() -> ArgMatches {
                 ),
         )
         .get_matches()
+}
+
+fn run_repl() {
+    let cli_welcome = format!(":: ham REPL ({}) ::", env!("CARGO_PKG_VERSION"));
+    let cli_tip = "Use Ctrl+C to exit.";
+
+    println!("{}\n{}", cli_welcome, cli_tip);
+
+    // Global context
+    let global_context = ast::ast_operations::Expression::new();
+
+    // Memory stack
+    let stack = Mutex::new(Stack::new(global_context.expr_id));
+
+    loop {
+        let answer = Question::new(">").ask().unwrap();
+
+        match answer {
+            question::Answer::RESPONSE(line) => {
+                // Code
+                let line = String::from(line);
+
+                // Tokens
+                let tokens = ham::get_tokens(line);
+
+                // Ast tree root
+                let tree = Mutex::new(ast::ast_operations::Expression::new());
+
+                // Tree
+                ham::move_tokens_into_ast(tokens, &tree);
+
+                // Run the code
+                ham::run_ast(&tree, &stack);
+
+                print!("  <-\n");
+            }
+            question::Answer::NO | question::Answer::YES => {}
+        }
+    }
 }
 
 fn main() {
@@ -76,42 +112,14 @@ fn main() {
                 );
             }
 
-            // Run (it will always return a Result<Err> because it doesn't return anything)
             ham::run_ast(&tree, &stack);
         }
         Some(("repl", _)) => {
-            println!("{}", CLI_MSG);
-
-            // Global context
-            let global_context = ast::ast_operations::Expression::new();
-
-            // Memory stack
-            let stack = Mutex::new(Stack::new(global_context.expr_id));
-
-            let stdin = io::stdin();
-
-            println!(">");
-            for line in stdin.lock().lines() {
-                // Code
-                let line = String::from(line.unwrap());
-
-                // Tokens
-                let tokens = ham::get_tokens(line);
-
-                // Ast tree root
-                let tree = Mutex::new(ast::ast_operations::Expression::new());
-
-                // Tree
-                ham::move_tokens_into_ast(tokens, &tree);
-
-                // Run (it will always return a Result<Err> because it doesn't return anything)
-                ham::run_ast(&tree, &stack);
-
-                println!("  <- ");
-
-                println!(">");
-            }
+            run_repl();
         }
-        _ => {}
+        _ => {
+            // Default to repl
+            run_repl();
+        }
     }
 }
