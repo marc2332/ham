@@ -5,7 +5,7 @@ mod stack;
 mod types;
 mod utils;
 
-use crate::ast::ast_operations::{ExpressionBase};
+use crate::ast::ast_operations::ExpressionBase;
 use crate::stack::Stack;
 use clap::{App, Arg, ArgMatches};
 use std::fs;
@@ -22,10 +22,7 @@ fn commands<'a>() -> ArgMatches {
         .subcommand(App::new("repl"))
         .subcommand(
             App::new("run")
-                .arg(
-                    Arg::new("file")
-                        .about("Live code interpreter."),
-                )
+                .arg(Arg::new("file").about("Live code interpreter."))
                 .arg(
                     Arg::new("show_ast_tree")
                         .about("Displays the AST Tree of the code.")
@@ -47,12 +44,15 @@ fn main() {
             let filename = if is_file.is_some() {
                 is_file.unwrap().to_string()
             } else {
-                format!("{}/src/main.ham",std::env::current_dir().unwrap().display())
+                format!(
+                    "{}/src/main.ham",
+                    std::env::current_dir().unwrap().display()
+                )
             };
 
             // File content
-            let filecontent =
-                fs::read_to_string(filename.as_str()).expect("Something went wrong reading the file");
+            let filecontent = fs::read_to_string(filename.as_str())
+                .expect("Something went wrong reading the file");
 
             // Tokens
             let tokens = ham::get_tokens(filecontent);

@@ -1,7 +1,7 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{
     AstBase, BoxedValue, ExpressionBase, FnCallBase, FnDefinitionBase, IfConditionalBase,
-    VarAssignmentBase, VarDefinitionBase,
+    VarAssignmentBase, VarDefinitionBase, WhileBase,
 };
 use crate::runtime::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, downcast_val,
@@ -11,7 +11,7 @@ use crate::runtime::{
 use crate::stack::{FunctionDef, FunctionsContainer, Stack, VariableDef};
 use crate::types::{IndexedTokenList, LinesList, Token, TokensList};
 use crate::utils::op_codes::Directions;
-use crate::utils::primitive_values::StringVal;
+use crate::utils::primitive_values::{Boolean, StringVal};
 use crate::utils::{errors, op_codes, primitive_values};
 use regex::Regex;
 use std::sync::Mutex;
@@ -85,6 +85,8 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "return" => op_codes::RETURN,
                 "." => op_codes::PROP_ACCESS,
                 "," => op_codes::COMMA_DELIMITER,
+                "while" => op_codes::WHILE_DEF,
+                "!=" => op_codes::NOT_EQUAL_CONDITION,
                 _ => op_codes::REFERENCE,
             };
 
@@ -155,6 +157,45 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
         match current_token.ast_type {
+            // While block
+            op_codes::WHILE_DEF => {
+                // Get the if condition tokens
+                let condition_tokens = get_tokens_from_to(token_n + 1, op_codes::OPEN_BLOCK);
+
+                // Transform those tokens into result expressions
+                let exprs = convert_tokens_into_res_expressions(
+                    condition_tokens
+                        .clone()
+                        .iter()
+                        .map(|(_, token)| token.clone())
+                        .collect(),
+                );
+
+                // Scope tree
+                let scope_tree = Mutex::new(ast_operations::Expression::new());
+
+                // Ignore the if conditions and {
+                let open_block_index = token_n + condition_tokens.len() + 1;
+
+                // Get all tokens inside the if block
+                let block_tokens = get_tokens_in_group_of(
+                    open_block_index,
+                    op_codes::OPEN_BLOCK,
+                    op_codes::CLOSE_BLOCK,
+                );
+
+                // Move the tokens into the tree
+                move_tokens_into_ast(block_tokens.clone(), &scope_tree);
+
+                // Ignore the whilte body
+                token_n = block_tokens.len() + open_block_index + 1;
+
+                // Create a while definition
+                let body = &scope_tree.lock().unwrap().body.clone();
+                let ast_token = ast_operations::While::new(exprs.clone(), body.to_vec());
+                ast_tree.body.push(Box::new(ast_token));
+            }
+
             // Return statement
             op_codes::RETURN => {
                 let next_token = tokens[token_n + 1].clone();
@@ -198,10 +239,10 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 // Move the tokens into the tree
                 move_tokens_into_ast(block_tokens.clone(), &scope_tree);
 
-                // Ignore the function body
+                // Ignore the block body
                 token_n = block_tokens.len() + open_block_index + 1;
 
-                // Create a function definition
+                // Create a if block definition
                 let body = &scope_tree.lock().unwrap().body.clone();
                 let ast_token = ast_operations::IfConditional::new(exprs.clone(), body.to_vec());
                 ast_tree.body.push(Box::new(ast_token));
@@ -400,9 +441,19 @@ pub fn run_ast(
             let right_val = right_val.unwrap();
 
             match condition_code {
+                op_codes::NOT_EQUAL_CONDITION => {
+                    let left_val = value_to_string(left_val).unwrap();
+                    let right_val = value_to_string(right_val).unwrap();
+
+                    if left_val != right_val {
+                        true
+                    } else {
+                        false
+                    }
+                }
                 op_codes::EQUAL_CONDITION => {
-                    let left_val = value_to_string(left_val);
-                    let right_val = value_to_string(right_val);
+                    let left_val = value_to_string(left_val).unwrap();
+                    let right_val = value_to_string(right_val).unwrap();
 
                     if left_val == right_val {
                         true
@@ -419,6 +470,66 @@ pub fn run_ast(
 
     for operation in &ast.body {
         match operation.get_type() {
+            /*
+             * Handle if block
+             */
+            op_codes::WHILE_DEF => {
+                let while_block = downcast_val::<ast_operations::While>(operation.as_self());
+
+                let check_while = |while_block: &ast_operations::While| -> Option<BoxedValue> {
+                    /*
+                     * Evaluate all conditions,
+                     * If all they return true then execute the IF's expression block
+                     */
+                    let mut true_count = 0;
+
+                    for condition in while_block.conditions.clone() {
+                        let res =
+                            eval_condition(condition.relation, condition.left, condition.right);
+
+                        if res == true {
+                            true_count += 1;
+                        }
+                    }
+
+                    if true_count == while_block.conditions.len() {
+                        let expr = ast_operations::Expression::from_body(while_block.body.clone());
+                        let expr_id = expr.expr_id.clone();
+
+                        // Execute the expression block
+                        let if_block_return = run_ast(&Mutex::new(expr), stack);
+
+                        if if_block_return.is_some() {
+                            return Some(if_block_return.unwrap());
+                        }
+
+                        // Clean the expression definitions from the stack
+                        stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
+                        return Some(BoxedValue {
+                            value: Box::new(Boolean(false)),
+                            interface: op_codes::WHILE_DEF,
+                        });
+                    } else {
+                        return None;
+                    }
+                };
+
+                let mut stopped = false;
+
+                while stopped == false {
+                    let res = check_while(while_block);
+
+                    if res.is_some() {
+                        let res = res.unwrap();
+                        if res.interface != op_codes::WHILE_DEF {
+                            return Some(res);
+                        }
+                    } else {
+                        stopped = true;
+                    }
+                }
+            }
+
             /*
              * Handle return statements
              */
@@ -507,7 +618,7 @@ pub fn run_ast(
 
                         stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
 
-                        if return_val.is_some() {
+                        if return_val.is_none() {
                             return return_val;
                         } else {
                             let return_val = return_val.unwrap();

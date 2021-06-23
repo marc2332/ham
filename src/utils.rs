@@ -32,9 +32,11 @@ pub mod op_codes {
     pub const RETURN: Val = 17; // return
     pub const PROP_ACCESS: Val = 18; // .
     pub const COMMA_DELIMITER: Val = 19; //,
+    pub const WHILE_DEF: Val = 20;
+    pub const NOT_EQUAL_CONDITION: Val = 21; // !=
 
     // This must be equal to the latest code
-    const CODES_RANGE: Val = 19;
+    const CODES_RANGE: Val = 21;
 
     // If the code is lower than 0 or greater than the defined range above it becomes invalid
     pub fn is_valid(op_code: Val) -> bool {

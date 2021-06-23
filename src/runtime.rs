@@ -288,7 +288,7 @@ pub fn convert_tokens_into_res_expressions(
         let token = tokens[token_n].clone();
 
         match token.ast_type {
-            op_codes::EQUAL_CONDITION => {
+            op_codes::EQUAL_CONDITION | op_codes::NOT_EQUAL_CONDITION => {
                 let right_token = tokens[token_n + 1].clone();
 
                 let left_token = get_assignment_token_fn(
@@ -306,7 +306,7 @@ pub fn convert_tokens_into_res_expressions(
                 );
 
                 exprs.push(ast_operations::ResultExpression::new(
-                    op_codes::EQUAL_CONDITION,
+                    token.ast_type,
                     left_token.1.clone(),
                     right_token.1.clone(),
                 ));
