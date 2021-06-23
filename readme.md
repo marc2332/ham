@@ -7,6 +7,12 @@ status: **alpha**
 - Security
 - Comfort
 
+### Ideas
+- Rust interoperability
+- Ability to import externals files
+- std library
+- Low-level (networking, file system...) APIs
+
 ### Example
 
 ```rust
@@ -44,7 +50,7 @@ ham run examples/demo.ham
 
 Compile:
 ```shell
-cargo build
+cargo build --release
 ```
 
 Running directly:
