@@ -13,7 +13,7 @@ use std::fs;
 use std::sync::Mutex;
 
 fn commands<'a>() -> ArgMatches {
-    App::new("HAM Interpreter")
+    App::new("ham")
         .version("1.0")
         .author("Marc E. <mespinsanz@gmail.com>")
         .subcommand(App::new("repl"))
