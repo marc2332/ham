@@ -15,6 +15,7 @@ use crate::utils::primitive_values::{Boolean, StringVal};
 use crate::utils::{errors, op_codes, primitive_values};
 use regex::Regex;
 use std::sync::Mutex;
+use uuid::Uuid;
 
 /*
  * Split the text by the passed regex but also keep these words which are removed when splitting
@@ -631,7 +632,8 @@ pub fn run_ast(
                             );
                         }
                     },
-                    expr_id: ast.expr_id.clone(),
+                    // TODO: Move away from Uuid
+                    expr_id: Uuid::new_v4().to_string(),
                 });
             }
 

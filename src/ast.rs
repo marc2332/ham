@@ -258,6 +258,7 @@ pub mod ast_operations {
             Expression {
                 token_type: op_codes::EXPRESSION,
                 body,
+                // TODO: Move away from Uuid
                 expr_id: Uuid::new_v4().to_string(),
             }
         }

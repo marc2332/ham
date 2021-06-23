@@ -178,6 +178,45 @@ impl Stack {
     }
 
     /*
+     * Print variables and functions stored on stack
+     */
+    #[allow(dead_code)]
+    pub fn debug_print(&self) {
+        let functions: String = self
+            .functions
+            .iter()
+            .map(|func| {
+                format!(
+                    "fn {}({}); is {} \n",
+                    func.0,
+                    func.1.arguments.join(", "),
+                    func.1.expr_id
+                )
+            })
+            .collect();
+        let variables: String = self
+            .variables
+            .iter()
+            .map(|var| {
+                format!(
+                    "let {} = {};  in {} \n",
+                    var.0,
+                    value_to_string(BoxedValue {
+                        value: var.1.value.clone(),
+                        interface: var.1.val_type.clone()
+                    })
+                    .unwrap(),
+                    var.1.expr_id
+                )
+            })
+            .collect();
+        println!(
+            "DEBUG:: \n | functions | \n{} \n | variables | \n{}",
+            functions, variables
+        );
+    }
+
+    /*
      * Drop from the stack all variables and functions which are port
      * of an specified expression ID
      *
