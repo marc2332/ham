@@ -266,7 +266,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                             op_codes::FN_CALL => {
                                 let mut ast_token = ast_operations::FnCall::new(
                                     next_token.value.clone(),
-                                    previous_token.value,
+                                    Some(previous_token.value),
                                 );
 
                                 // Ignore itself and the (
@@ -382,10 +382,8 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                         token_n += 2 + size;
                     }
                     op_codes::FN_CALL => {
-                        let mut ast_token = ast_operations::FnCall::new(
-                            current_token.value.clone(),
-                            String::from(""),
-                        );
+                        let mut ast_token =
+                            ast_operations::FnCall::new(current_token.value.clone(), None);
 
                         // Ignore itself and the (
                         let starting_token = token_n + 1;
@@ -700,27 +698,26 @@ pub fn run_ast(
             op_codes::FN_CALL => {
                 let fn_call = downcast_val::<ast_operations::FnCall>(operation.as_self());
 
-                let is_referenced = fn_call.reference_to != "";
+                let is_referenced = fn_call.reference_to.is_some();
 
                 let function = if is_referenced {
-                    let variable = stack
-                        .lock()
-                        .unwrap()
-                        .get_variable(fn_call.reference_to.as_str());
+                    let reference_to = fn_call.reference_to.as_ref().unwrap();
+                    let variable = stack.lock().unwrap().get_variable(reference_to.as_str());
                     variable.unwrap().get_function(fn_call.fn_name.as_str())
                 } else {
                     stack.lock().unwrap().get_function(fn_call.fn_name.as_str())
                 };
 
                 // If the calling function is found
-                if function.is_ok() {
+                if function.is_some() {
                     let function = function.unwrap();
                     let mut arguments = Vec::new();
 
                     if is_referenced {
+                        let reference_to = fn_call.reference_to.as_ref().unwrap();
                         arguments.push(BoxedValue {
                             interface: op_codes::STRING,
-                            value: Box::new(StringVal(fn_call.reference_to.clone())),
+                            value: Box::new(StringVal(reference_to.to_string())),
                         });
                     }
 

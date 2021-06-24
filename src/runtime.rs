@@ -189,11 +189,13 @@ pub fn get_assignment_token_fn(
                                 if token_n > 0 {
                                     let previous_token = tokens[token_n - 1].clone();
                                     match previous_token.ast_type {
-                                        op_codes::PROP_ACCESS => tokens[token_n - 2].value.clone(),
-                                        _ => String::new(),
+                                        op_codes::PROP_ACCESS => {
+                                            Some(tokens[token_n - 2].value.clone())
+                                        }
+                                        _ => None,
                                     }
                                 } else {
-                                    String::new()
+                                    None
                                 }
                             },
                         );
@@ -484,13 +486,11 @@ pub fn resolve_reference(
         op_codes::FN_CALL => {
             let fn_call = downcast_val::<ast_operations::FnCall>(ref_val.as_self());
 
-            let is_referenced = fn_call.reference_to != "";
+            let is_referenced = fn_call.reference_to.is_some();
 
             let function = if is_referenced {
-                let variable = stack
-                    .lock()
-                    .unwrap()
-                    .get_variable(fn_call.reference_to.as_str());
+                let reference_to = fn_call.reference_to.as_ref().unwrap();
+                let variable = stack.lock().unwrap().get_variable(reference_to.as_str());
 
                 variable.unwrap().get_function(fn_call.fn_name.as_str())
             } else {
@@ -498,14 +498,15 @@ pub fn resolve_reference(
             };
 
             // If the calling function is found
-            if function.is_ok() {
+            if function.is_some() {
                 let function = function.unwrap();
                 let mut arguments = Vec::new();
 
                 if is_referenced {
+                    let reference_to = fn_call.reference_to.as_ref().unwrap();
                     arguments.push(BoxedValue {
                         interface: op_codes::STRING,
-                        value: Box::new(StringVal(fn_call.reference_to.clone())),
+                        value: Box::new(StringVal(reference_to.to_string())),
                     });
                 }
 

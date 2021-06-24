@@ -10,17 +10,14 @@ use std::{thread, time};
 /*
  * Get a function by it's name
  */
-fn get_function(
-    fn_name: &str,
-    functions: &HashMap<String, FunctionDef>,
-) -> Result<FunctionDef, ()> {
+fn get_function(fn_name: &str, functions: &HashMap<String, FunctionDef>) -> Option<FunctionDef> {
     let op_fn: Option<&FunctionDef> = functions.get(fn_name);
 
     if op_fn.is_some() {
-        Ok(op_fn.unwrap().clone())
+        Some(op_fn.unwrap().clone())
     } else {
         errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
-        Err(())
+        None
     }
 }
 
@@ -37,8 +34,11 @@ pub struct VariableDef {
 }
 
 impl FunctionsContainer for VariableDef {
-    fn get_function(&self, fn_name: &str) -> Result<FunctionDef, ()> {
+    fn get_function(&self, fn_name: &str) -> Option<FunctionDef> {
         get_function(fn_name, &self.functions)
+    }
+    fn push_function(&mut self, function: FunctionDef) {
+        self.functions.insert(function.name.clone(), function);
     }
 }
 
@@ -61,10 +61,17 @@ pub struct FunctionDef {
 }
 
 /*
- * Returns a function by it's name
+ * Common layer for functions container (ex: variables, memory stack)
  */
 pub trait FunctionsContainer {
-    fn get_function(&self, fn_name: &str) -> Result<FunctionDef, ()>;
+    /*
+     * Return the requested function if found
+     */
+    fn get_function(&self, fn_name: &str) -> Option<FunctionDef>;
+    /*
+     * Push a function into the container
+     */
+    fn push_function(&mut self, function: FunctionDef);
 }
 
 /*
@@ -77,8 +84,11 @@ pub struct Stack {
 }
 
 impl FunctionsContainer for Stack {
-    fn get_function(&self, fn_name: &str) -> Result<FunctionDef, ()> {
+    fn get_function(&self, fn_name: &str) -> Option<FunctionDef> {
         get_function(fn_name, &self.functions)
+    }
+    fn push_function(&mut self, function: FunctionDef) {
+        self.functions.insert(function.name.clone(), function);
     }
 }
 
@@ -88,6 +98,11 @@ impl Stack {
 
         /*
          * format() function
+         *
+         * Example:
+         *
+         * let msg = format("Hello {} from {}", "people", "world")
+         *
          */
         functions.insert(
             "format".to_string(),
@@ -225,13 +240,6 @@ impl Stack {
     pub fn drop_ops_from_id(&mut self, id: String) {
         self.variables.retain(|_, var| var.expr_id != id);
         self.functions.retain(|_, func| func.expr_id != id);
-    }
-
-    /*
-     * Shorthand to push a function into the stack
-     */
-    pub fn push_function(&mut self, function: FunctionDef) {
-        self.functions.insert(function.name.clone(), function);
     }
 
     /*

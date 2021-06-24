@@ -1,6 +1,5 @@
 pub mod ast_operations {
 
-    /* BASE */
     use crate::utils::primitive_values::PrimitiveValueBase;
     use crate::utils::{op_codes, primitive_values};
 
@@ -10,6 +9,7 @@ pub mod ast_operations {
     use std::any::Any;
     use uuid::Uuid;
 
+    /* BASE */
     pub trait AstBase: dyn_clone::DynClone + erased_serde::Serialize + std::fmt::Debug {
         fn get_type(&self) -> op_codes::Val;
         fn as_self(&self) -> &dyn Any;
@@ -271,10 +271,7 @@ pub mod ast_operations {
         pub token_type: op_codes::Val,
         pub fn_name: String,
         pub arguments: Vec<BoxedValue>,
-        /*
-         * TODO: Use Option
-         */
-        pub reference_to: String,
+        pub reference_to: Option<String>,
     }
 
     impl AstBase for FnCall {
@@ -287,11 +284,11 @@ pub mod ast_operations {
     }
 
     pub trait FnCallBase {
-        fn new(fn_name: String, reference_to: String) -> Self;
+        fn new(fn_name: String, reference_to: Option<String>) -> Self;
     }
 
     impl FnCallBase for FnCall {
-        fn new(fn_name: String, reference_to: String) -> FnCall {
+        fn new(fn_name: String, reference_to: Option<String>) -> FnCall {
             FnCall {
                 token_type: op_codes::FN_CALL,
                 fn_name,

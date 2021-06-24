@@ -38,7 +38,7 @@ pub mod op_codes {
     // This must be equal to the latest code
     const CODES_RANGE: Val = 21;
 
-    // If the code is lower than 0 or greater than the defined range above it becomes invalid
+    // If the code is greater than the defined range above it becomes invalid
     pub fn is_valid(op_code: Val) -> bool {
         if op_code > CODES_RANGE {
             false
@@ -66,7 +66,7 @@ pub mod primitive_values {
      * Reference
      *
      * This happens when a variable instead of having an static value,
-     * it references to another variable
+     * it references to another variable by it's name
      *
      */
 
@@ -228,6 +228,6 @@ pub mod errors {
             _ => String::from("Unhandled error"),
         };
 
-        println!(" \n\n :: Error :: {}", msg);
+        println!(" \n :: Error :: {}", msg);
     }
 }
