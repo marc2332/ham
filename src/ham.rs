@@ -601,16 +601,14 @@ pub fn run_ast(
                         for (i, arg) in args_vals.clone().iter().enumerate() {
                             let arg_name = args[i].clone();
 
-                            stack.lock().unwrap().variables.insert(
-                                arg_name.clone(),
-                                VariableDef {
-                                    name: arg_name,
-                                    value: arg.value.clone(),
-                                    val_type: arg.interface.clone(),
-                                    expr_id: expr_id.clone(),
-                                    functions: get_methods_in_type(arg.interface),
-                                },
-                            );
+                            stack.lock().unwrap().push_variable(VariableDef {
+                                name: arg_name,
+                                value: arg.value.clone(),
+                                val_type: arg.interface.clone(),
+                                expr_id: expr_id.clone(),
+                                functions: get_methods_in_type(arg.interface),
+                                var_id: Uuid::new_v4().to_string(),
+                            })
                         }
 
                         let return_val = run_ast(&Mutex::new(expr), stack);
@@ -658,16 +656,14 @@ pub fn run_ast(
                             vec![val_type.to_string()],
                         )
                     } else {
-                        stack.lock().unwrap().variables.insert(
-                            variable.def_name.clone(),
-                            VariableDef {
-                                name: variable.def_name.clone(),
-                                val_type: reference.interface.clone(),
-                                value: reference.value,
-                                expr_id: ast.expr_id.clone(),
-                                functions: get_methods_in_type(reference.interface),
-                            },
-                        );
+                        stack.lock().unwrap().push_variable(VariableDef {
+                            name: variable.def_name.clone(),
+                            val_type: reference.interface.clone(),
+                            value: reference.value,
+                            expr_id: ast.expr_id.clone(),
+                            functions: get_methods_in_type(reference.interface),
+                            var_id: Uuid::new_v4().to_string(),
+                        });
                     }
                 }
             }
@@ -702,10 +698,18 @@ pub fn run_ast(
 
                 let function = if is_referenced {
                     let reference_to = fn_call.reference_to.as_ref().unwrap();
-                    let variable = stack.lock().unwrap().get_variable(reference_to.as_str());
-                    variable.unwrap().get_function(fn_call.fn_name.as_str())
+                    let variable = stack
+                        .lock()
+                        .unwrap()
+                        .get_variable_by_name(reference_to.as_str());
+                    variable
+                        .unwrap()
+                        .get_function_by_name(fn_call.fn_name.as_str())
                 } else {
-                    stack.lock().unwrap().get_function(fn_call.fn_name.as_str())
+                    stack
+                        .lock()
+                        .unwrap()
+                        .get_function_by_name(fn_call.fn_name.as_str())
                 };
 
                 // If the calling function is found

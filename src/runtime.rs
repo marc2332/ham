@@ -380,9 +380,12 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
                         let var_name = value_to_string(args[0].clone()).unwrap();
                         let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
 
-                        let var_ref = stack.lock().unwrap().get_variable(var_name.as_str());
+                        let var_ref = stack
+                            .lock()
+                            .unwrap()
+                            .get_variable_by_name(var_name.as_str());
 
-                        if var_ref.is_ok() {
+                        if var_ref.is_some() {
                             let current_var = var_ref.unwrap();
                             let current_var = downcast_val::<Number>(current_var.value.as_self());
                             let current_val = current_var.get_state();
@@ -415,9 +418,12 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
                         let var_name = value_to_string(args[0].clone()).unwrap();
                         let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
 
-                        let var_ref = stack.lock().unwrap().get_variable(var_name.as_str());
+                        let var_ref = stack
+                            .lock()
+                            .unwrap()
+                            .get_variable_by_name(var_name.as_str());
 
-                        if var_ref.is_ok() {
+                        if var_ref.is_some() {
                             let current_var = var_ref.unwrap();
                             let current_val = downcast_val::<Number>(current_var.value.as_self());
                             let current_num = current_val.get_state();
@@ -471,9 +477,9 @@ pub fn resolve_reference(
                 .0
                 .clone();
 
-            let variable = stack.lock().unwrap().get_variable(val.as_str());
+            let variable = stack.lock().unwrap().get_variable_by_name(val.as_str());
 
-            if variable.is_ok() {
+            if variable.is_some() {
                 let variable = variable.unwrap();
                 Some(BoxedValue {
                     interface: variable.val_type,
@@ -490,11 +496,19 @@ pub fn resolve_reference(
 
             let function = if is_referenced {
                 let reference_to = fn_call.reference_to.as_ref().unwrap();
-                let variable = stack.lock().unwrap().get_variable(reference_to.as_str());
+                let variable = stack
+                    .lock()
+                    .unwrap()
+                    .get_variable_by_name(reference_to.as_str());
 
-                variable.unwrap().get_function(fn_call.fn_name.as_str())
+                variable
+                    .unwrap()
+                    .get_function_by_name(fn_call.fn_name.as_str())
             } else {
-                stack.lock().unwrap().get_function(fn_call.fn_name.as_str())
+                stack
+                    .lock()
+                    .unwrap()
+                    .get_function_by_name(fn_call.fn_name.as_str())
             };
 
             // If the calling function is found

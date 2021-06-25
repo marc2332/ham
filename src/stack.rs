@@ -8,20 +8,6 @@ use std::sync::{Mutex, MutexGuard};
 use std::{thread, time};
 
 /*
- * Get a function by it's name
- */
-fn get_function(fn_name: &str, functions: &HashMap<String, FunctionDef>) -> Option<FunctionDef> {
-    let op_fn: Option<&FunctionDef> = functions.get(fn_name);
-
-    if op_fn.is_some() {
-        Some(op_fn.unwrap().clone())
-    } else {
-        errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
-        None
-    }
-}
-
-/*
  * Variable definition stored on the memory stack
  */
 #[derive(Clone)]
@@ -31,11 +17,19 @@ pub struct VariableDef {
     pub value: Box<dyn primitive_values::PrimitiveValueBase>,
     pub expr_id: String,
     pub functions: HashMap<String, FunctionDef>,
+    pub var_id: String,
 }
 
 impl FunctionsContainer for VariableDef {
-    fn get_function(&self, fn_name: &str) -> Option<FunctionDef> {
-        get_function(fn_name, &self.functions)
+    fn get_function_by_name(&self, fn_name: &str) -> Option<FunctionDef> {
+        let op_fn: Option<&FunctionDef> = self.functions.get(fn_name);
+
+        if op_fn.is_some() {
+            Some(op_fn.unwrap().clone())
+        } else {
+            errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
+            None
+        }
     }
     fn push_function(&mut self, function: FunctionDef) {
         self.functions.insert(function.name.clone(), function);
@@ -67,7 +61,7 @@ pub trait FunctionsContainer {
     /*
      * Return the requested function if found
      */
-    fn get_function(&self, fn_name: &str) -> Option<FunctionDef>;
+    fn get_function_by_name(&self, fn_name: &str) -> Option<FunctionDef>;
     /*
      * Push a function into the container
      */
@@ -84,11 +78,16 @@ pub struct Stack {
 }
 
 impl FunctionsContainer for Stack {
-    fn get_function(&self, fn_name: &str) -> Option<FunctionDef> {
-        get_function(fn_name, &self.functions)
+    fn get_function_by_name(&self, fn_name: &str) -> Option<FunctionDef> {
+        for (_, function) in &self.functions {
+            if function.name == fn_name.to_string() {
+                return Some(function.clone());
+            }
+        }
+        return None;
     }
     fn push_function(&mut self, function: FunctionDef) {
-        self.functions.insert(function.name.clone(), function);
+        self.functions.insert(function.expr_id.clone(), function);
     }
 }
 
@@ -242,20 +241,34 @@ impl Stack {
         self.functions.retain(|_, func| func.expr_id != id);
     }
 
-    /*
-     * Search variables in the stack by its name
-     *
-     * IDEA: deprecate referencing variables by it's name but instead use a uuid
-     */
-    pub fn get_variable(&self, var_name: &str) -> Result<VariableDef, ()> {
-        let op_var = self.variables.get(var_name);
+    pub fn push_variable(&mut self, var: VariableDef) {
+        self.variables.insert(var.var_id.clone(), var.clone());
+    }
 
-        if op_var.is_some() {
-            Ok(op_var.unwrap().clone())
-        } else {
-            errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.to_string()]);
-            Err(())
+    /*
+     * Get a variable in the stack by its name
+     *
+     */
+    pub fn get_variable_by_name(&self, var_name: &str) -> Option<VariableDef> {
+        for (_, variable) in &self.variables {
+            if variable.name == var_name.to_string() {
+                return Some(variable.clone());
+            }
         }
+        return None;
+    }
+
+    /*
+     * Get a mutable variable in the stack by its name
+     *
+     */
+    pub fn get_mut_variable_by_name(&mut self, var_name: &str) -> Option<&mut VariableDef> {
+        for (_, variable) in &mut self.variables {
+            if variable.name == var_name.to_string() {
+                return Some(variable);
+            }
+        }
+        return None;
     }
 
     /*
@@ -266,7 +279,7 @@ impl Stack {
         var_name: String,
         value: Box<dyn primitive_values::PrimitiveValueBase>,
     ) {
-        let mut_var = self.variables.get_mut(var_name.as_str());
+        let mut_var = self.get_mut_variable_by_name(var_name.as_str());
 
         if mut_var.is_some() {
             let mut_var = mut_var.unwrap();
