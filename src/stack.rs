@@ -1,6 +1,6 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{AstBase, BoxedValue};
-use crate::runtime::{value_to_string, values_to_strings};
+use crate::runtime::{downcast_val, value_to_string, values_to_strings};
 use crate::utils::primitive_values::StringVal;
 use crate::utils::{errors, op_codes, primitive_values};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ pub struct VariableDef {
     pub value: Box<dyn primitive_values::PrimitiveValueBase>,
     pub expr_id: String,
     pub functions: HashMap<String, FunctionDef>,
-    pub var_id: String,
+    pub var_id: u64,
 }
 
 impl FunctionsContainer for VariableDef {
@@ -74,7 +74,8 @@ pub trait FunctionsContainer {
 #[derive(Clone)]
 pub struct Stack {
     pub functions: HashMap<String, FunctionDef>,
-    pub variables: HashMap<String, VariableDef>,
+    pub variables: Vec<VariableDef>,
+    pub item_index: u64,
 }
 
 impl FunctionsContainer for Stack {
@@ -92,8 +93,27 @@ impl FunctionsContainer for Stack {
 }
 
 impl Stack {
+    pub fn reseve_index(&mut self) -> u64 {
+        self.item_index += 1;
+        return self.item_index;
+    }
+
     pub fn new(expr_id: String) -> Stack {
         let mut functions = HashMap::new();
+
+        functions.insert(
+            "clear".to_string(),
+            FunctionDef {
+                name: "clear".to_string(),
+                body: vec![],
+                arguments: vec![],
+                cb: |_, _, _, _, _| {
+                    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+                    None
+                },
+                expr_id: expr_id.clone(),
+            },
+        );
 
         /*
          * format() function
@@ -109,8 +129,8 @@ impl Stack {
                 name: "format".to_string(),
                 body: vec![],
                 arguments: vec![],
-                cb: |_, args, _, _, _| {
-                    let mut args = values_to_strings(args);
+                cb: |_, args, _, stack, _| {
+                    let mut args = values_to_strings(args, stack);
 
                     let mut template = args[0].clone();
 
@@ -138,8 +158,8 @@ impl Stack {
                 name: "print".to_string(),
                 body: vec![],
                 arguments: vec![],
-                cb: |_, args, _, _, _| {
-                    print!("{}", values_to_strings(args).join(" "));
+                cb: |_, args, _, stack, _| {
+                    print!("{}", values_to_strings(args, stack).join(" "));
                     None
                 },
                 expr_id: expr_id.clone(),
@@ -155,8 +175,8 @@ impl Stack {
                 name: "println".to_string(),
                 body: vec![],
                 arguments: vec![],
-                cb: |_, args, _, _, _| {
-                    println!("{}", values_to_strings(args).join(""));
+                cb: |_, args, _, stack, _| {
+                    println!("{}", values_to_strings(args, stack).join(""));
                     None
                 },
                 expr_id: expr_id.clone(),
@@ -172,8 +192,8 @@ impl Stack {
                 name: "wait".to_string(),
                 body: vec![],
                 arguments: vec![],
-                cb: |_, args, _, _, _| {
-                    let time = value_to_string(args[0].clone())
+                cb: |_, args, _, stack, _| {
+                    let time = value_to_string(args[0].clone(), stack)
                         .unwrap()
                         .parse::<u64>()
                         .unwrap();
@@ -186,8 +206,9 @@ impl Stack {
         );
 
         Stack {
-            variables: HashMap::new(),
+            variables: Vec::new(),
             functions,
+            item_index: 0,
         }
     }
 
@@ -214,13 +235,16 @@ impl Stack {
             .map(|var| {
                 format!(
                     "let {} = {};  in {} \n",
-                    var.0,
-                    value_to_string(BoxedValue {
-                        value: var.1.value.clone(),
-                        interface: var.1.val_type.clone()
-                    })
+                    var.name,
+                    value_to_string(
+                        BoxedValue {
+                            value: var.value.clone(),
+                            interface: var.val_type.clone()
+                        },
+                        &Mutex::new(self.clone())
+                    )
                     .unwrap(),
-                    var.1.expr_id
+                    var.expr_id
                 )
             })
             .collect();
@@ -237,53 +261,90 @@ impl Stack {
      * This is mainly used in block expression (functions, if...)
      */
     pub fn drop_ops_from_id(&mut self, id: String) {
-        self.variables.retain(|_, var| var.expr_id != id);
+        self.variables.retain(|var| var.expr_id != id);
         self.functions.retain(|_, func| func.expr_id != id);
     }
 
     pub fn push_variable(&mut self, var: VariableDef) {
-        self.variables.insert(var.var_id.clone(), var.clone());
+        self.variables.push(var.clone());
     }
 
     /*
-     * Get a variable in the stack by its name
-     *
+     * Get a variable from the stack by its ID
+     */
+    pub fn get_variable_by_id(&self, var_id: u64) -> Option<VariableDef> {
+        for variable in &self.variables {
+            if variable.var_id == var_id {
+                return Some(variable.clone());
+            }
+        }
+        None
+    }
+
+    /*
+     * Get a variable from the stack by its name
      */
     pub fn get_variable_by_name(&self, var_name: &str) -> Option<VariableDef> {
-        for (_, variable) in &self.variables {
+        for variable in &self.variables {
             if variable.name == var_name.to_string() {
                 return Some(variable.clone());
             }
         }
-        return None;
+        None
     }
 
     /*
-     * Get a mutable variable in the stack by its name
-     *
+     * Get a mutable variable from the stack by its ID
+     */
+    pub fn get_mut_variable_by_id(&mut self, var_id: u64) -> Option<&mut VariableDef> {
+        for variable in &mut self.variables {
+            if variable.var_id == var_id {
+                return Some(variable);
+            }
+        }
+        None
+    }
+
+    /*
+     * Get a mutable variable from the stack by its name
      */
     pub fn get_mut_variable_by_name(&mut self, var_name: &str) -> Option<&mut VariableDef> {
-        for (_, variable) in &mut self.variables {
+        for variable in &mut self.variables {
             if variable.name == var_name.to_string() {
                 return Some(variable);
             }
         }
-        return None;
+        None
     }
 
     /*
      * Modify a variable value
      */
-    pub fn modify_var(
-        &mut self,
-        var_name: String,
-        value: Box<dyn primitive_values::PrimitiveValueBase>,
-    ) {
-        let mut_var = self.get_mut_variable_by_name(var_name.as_str());
+    pub fn modify_var(&mut self, var_name: String, value: BoxedValue) {
+        let variable = self.get_mut_variable_by_name(var_name.as_str());
 
-        if mut_var.is_some() {
-            let mut_var = mut_var.unwrap();
-            mut_var.value = value;
+        // If variable exists
+        if variable.is_some() {
+            let mut variable = variable.unwrap();
+
+            // Is pointer
+            if variable.val_type == op_codes::POINTER {
+                let variable = variable.clone();
+
+                let pointer = downcast_val::<primitive_values::Pointer>(variable.value.as_self());
+
+                let variable_origin = self.get_mut_variable_by_id(pointer.0);
+
+                if variable_origin.is_some() {
+                    let variable_origin = variable_origin.unwrap();
+                    variable_origin.value = value.value;
+                    variable_origin.val_type = value.interface;
+                } else {
+                    // Broken pointer
+                }
+            } else {
+                variable.value = value.value;
+            }
         } else {
             errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
         }

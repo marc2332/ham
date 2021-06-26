@@ -34,9 +34,10 @@ pub mod op_codes {
     pub const COMMA_DELIMITER: Val = 19; //,
     pub const WHILE_DEF: Val = 20;
     pub const NOT_EQUAL_CONDITION: Val = 21; // !=
+    pub const POINTER: Val = 22;
 
     // This must be equal to the latest code
-    const CODES_RANGE: Val = 21;
+    const CODES_RANGE: Val = 22;
 
     // If the code is greater than the defined range above it becomes invalid
     pub fn is_valid(op_code: Val) -> bool {
@@ -63,31 +64,27 @@ pub mod primitive_values {
     serialize_trait_object!(PrimitiveValueBase);
 
     /*
-     * Reference
-     *
-     * This happens when a variable instead of having an static value,
-     * it references to another variable by it's name
-     *
+     * Pointer
      */
 
     #[derive(Clone, Debug, Serialize)]
-    pub struct Reference(pub String);
+    pub struct Pointer(pub u64);
 
-    // Implement base methods for REFERENCE
-    impl PrimitiveValueBase for Reference {
+    // Implement base methods for Pointer
+    impl PrimitiveValueBase for Pointer {
         fn as_self(&self) -> &dyn Any {
             self
         }
     }
 
-    // Custom methods for REFERENCE
-    pub trait ReferenceValueBase {
-        fn new(val: String) -> Reference;
+    // Custom methods for String
+    pub trait PointerBase {
+        fn get_state(&self) -> u64;
     }
 
-    impl ReferenceValueBase for Reference {
-        fn new(val: String) -> Reference {
-            Reference(val)
+    impl PointerBase for Pointer {
+        fn get_state(&self) -> u64 {
+            self.0.clone()
         }
     }
 

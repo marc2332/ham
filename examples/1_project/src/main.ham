@@ -1,10 +1,18 @@
-fn count_from_until(from to){
-    while from != to {
-        println(format("Value -> {}", from))
-        from.mut_sum(1)
-    }
+let a = 5
+let b = &a
+
+if a == b {
+    print(1)
 }
 
-count_from_until(5 10)
+a = 1
 
+if a == b {
+    print(2)
+}
 
+&b = 7
+
+if a == b {
+    print(3)
+}

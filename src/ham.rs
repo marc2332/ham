@@ -441,8 +441,8 @@ pub fn run_ast(
 
             match condition_code {
                 op_codes::NOT_EQUAL_CONDITION => {
-                    let left_val = value_to_string(left_val).unwrap();
-                    let right_val = value_to_string(right_val).unwrap();
+                    let left_val = value_to_string(left_val, stack).unwrap();
+                    let right_val = value_to_string(right_val, stack).unwrap();
 
                     if left_val != right_val {
                         true
@@ -451,8 +451,8 @@ pub fn run_ast(
                     }
                 }
                 op_codes::EQUAL_CONDITION => {
-                    let left_val = value_to_string(left_val).unwrap();
-                    let right_val = value_to_string(right_val).unwrap();
+                    let left_val = value_to_string(left_val, stack).unwrap();
+                    let right_val = value_to_string(right_val, stack).unwrap();
 
                     if left_val == right_val {
                         true
@@ -600,14 +600,14 @@ pub fn run_ast(
 
                         for (i, arg) in args_vals.clone().iter().enumerate() {
                             let arg_name = args[i].clone();
-
+                            let var_id = stack.lock().unwrap().reseve_index();
                             stack.lock().unwrap().push_variable(VariableDef {
                                 name: arg_name,
                                 value: arg.value.clone(),
                                 val_type: arg.interface.clone(),
                                 expr_id: expr_id.clone(),
                                 functions: get_methods_in_type(arg.interface),
-                                var_id: Uuid::new_v4().to_string(),
+                                var_id,
                             })
                         }
 
@@ -656,13 +656,14 @@ pub fn run_ast(
                             vec![val_type.to_string()],
                         )
                     } else {
+                        let var_id = stack.lock().unwrap().reseve_index();
                         stack.lock().unwrap().push_variable(VariableDef {
                             name: variable.def_name.clone(),
                             val_type: reference.interface.clone(),
                             value: reference.value,
                             expr_id: ast.expr_id.clone(),
                             functions: get_methods_in_type(reference.interface),
-                            var_id: Uuid::new_v4().to_string(),
+                            var_id,
                         });
                     }
                 }
@@ -674,6 +675,17 @@ pub fn run_ast(
             op_codes::VAR_ASSIGN => {
                 let variable = downcast_val::<ast_operations::VarAssignment>(operation.as_self());
 
+                let is_pointer = variable.var_name.starts_with('&');
+
+                let variable_name = if is_pointer {
+                    // Remove & from it's name
+                    let mut variable_name = variable.var_name.clone();
+                    variable_name.remove(0);
+                    variable_name
+                } else {
+                    variable.var_name.clone()
+                };
+
                 let ref_val = resolve_ref(
                     variable.assignment.interface,
                     variable.assignment.value.clone(),
@@ -681,10 +693,7 @@ pub fn run_ast(
 
                 if ref_val.is_some() {
                     let ref_val = ref_val.unwrap();
-                    stack
-                        .lock()
-                        .unwrap()
-                        .modify_var(variable.var_name.clone(), ref_val.value);
+                    stack.lock().unwrap().modify_var(variable_name, ref_val);
                 }
             }
 
@@ -744,7 +753,7 @@ pub fn run_ast(
                     if res_func.is_some() {
                         let ret_val = res_func.unwrap();
 
-                        let val_stringified = value_to_string(ret_val);
+                        let val_stringified = value_to_string(ret_val, stack);
 
                         if val_stringified.is_ok() {
                             let val_stringified = val_stringified.unwrap();
@@ -756,7 +765,7 @@ pub fn run_ast(
                                 vec![
                                     val_stringified,
                                     fn_call.fn_name.clone(),
-                                    values_to_strings(arguments).join(" "),
+                                    values_to_strings(arguments, stack).join(" "),
                                 ],
                             )
                         }

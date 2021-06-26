@@ -1,10 +1,10 @@
-fn test(x){
-    if x == 5 {
-        return x
+fn calc(value){
+    if value == 5 {
+        return 0
     }
-    println(x)
-    return test(x.sum(1))
+    value.mut_sum(1)
+    println(format("{}", value))
+    return calc(value)
 }
 
-let _ = test(0)
-
+let _ = calc(0)
