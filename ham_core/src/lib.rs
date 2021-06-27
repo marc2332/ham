@@ -50,13 +50,17 @@ fn get_lines(code: String) -> LinesList {
 
     // Every line
     for line in code.split("\n") {
-        let line = String::from(line);
+        // Ignore // comments
+        if line.starts_with("//") {
+            continue;
+        }
+
         let mut line_ast = Vec::new();
 
         let re = Regex::new(r#"([\s+,.:])|("(.*?)")|([()])"#).unwrap();
 
         // Every detected word
-        for word in split(&re, &line) {
+        for word in split(&re, line) {
             // Prevent empty words
             if word.trim() != "" {
                 line_ast.push(String::from(word.trim()));

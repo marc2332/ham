@@ -1,0 +1,12 @@
+
+let pointer = 0
+
+fn mod_pointer(val){
+    val = 9
+}
+
+// Pass it as pointer
+mod_pointer(&pointer)
+
+// This prints 9
+println(pointer)
