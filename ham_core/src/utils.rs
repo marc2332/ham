@@ -35,18 +35,6 @@ pub mod op_codes {
     pub const WHILE_DEF: Val = 20;
     pub const NOT_EQUAL_CONDITION: Val = 21; // !=
     pub const POINTER: Val = 22;
-
-    // This must be equal to the latest code
-    const CODES_RANGE: Val = 22;
-
-    // If the code is greater than the defined range above it becomes invalid
-    pub fn is_valid(op_code: Val) -> bool {
-        if op_code > CODES_RANGE {
-            false
-        } else {
-            true
-        }
-    }
 }
 
 pub mod primitive_values {
@@ -84,7 +72,7 @@ pub mod primitive_values {
 
     impl PointerBase for Pointer {
         fn get_state(&self) -> u64 {
-            self.0.clone()
+            self.0
         }
     }
 
@@ -104,13 +92,13 @@ pub mod primitive_values {
 
     // Custom methods for String
     pub trait StringValueBase {
-        fn new(val: String) -> StringVal;
+        fn new(val: String) -> Self;
         fn get_state(&self) -> String;
     }
 
     impl StringValueBase for StringVal {
-        fn new(val: String) -> StringVal {
-            StringVal(val)
+        fn new(val: String) -> Self {
+            Self(val)
         }
 
         fn get_state(&self) -> String {
@@ -134,12 +122,12 @@ pub mod primitive_values {
 
     // Custom methods for Number
     pub trait NumberValueBase {
-        fn new(val: usize) -> Number;
+        fn new(val: usize) -> Self;
         fn get_state(&self) -> usize;
     }
 
     impl NumberValueBase for Number {
-        fn new(val: usize) -> Number {
+        fn new(val: usize) -> Self {
             Number(val)
         }
 
@@ -164,13 +152,13 @@ pub mod primitive_values {
 
     // Custom methods for Boolean
     pub trait BooleanValueBase {
-        fn new(val: bool) -> Boolean;
+        fn new(val: bool) -> Self;
         fn get_state(&self) -> bool;
     }
 
     impl BooleanValueBase for Boolean {
-        fn new(val: bool) -> Boolean {
-            Boolean(val)
+        fn new(val: bool) -> Self {
+            Self(val)
         }
 
         fn get_state(&self) -> bool {

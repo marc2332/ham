@@ -67,6 +67,9 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
     let mut res = HashMap::new();
 
     match val_type {
+        /*
+         * Methods for numbers
+         */
         op_codes::NUMBER => {
             /*
              * function: sum()
@@ -150,6 +153,16 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
                 },
             );
         }
+
+        /*
+         * TODO: Methods for strings
+         */
+        op_codes::STRING => {}
+
+        /*
+         * TODO: Methods for booleans
+         */
+        op_codes::BOOLEAN => {}
         _ => (),
     }
 
@@ -169,12 +182,7 @@ pub fn resolve_reference(
     match val_type {
         op_codes::POINTER => {
             let pointer = downcast_val::<primitive_values::Pointer>(ref_val.as_self()).0;
-            let variable = stack
-                .lock()
-                .unwrap()
-                .get_variable_by_id(pointer)
-                .unwrap()
-                .clone();
+            let variable = stack.lock().unwrap().get_variable_by_id(pointer).unwrap();
 
             Some(BoxedValue {
                 value: variable.value,
@@ -200,13 +208,10 @@ pub fn resolve_reference(
 
             let is_pointer = variable_name.starts_with('&');
 
-            let variable_name = if is_pointer {
+            if is_pointer {
                 // Remove & from it's name
                 variable_name.remove(0);
-                variable_name
-            } else {
-                variable_name
-            };
+            }
 
             let variable = stack
                 .lock()
@@ -254,10 +259,10 @@ pub fn resolve_reference(
             };
 
             // If the calling function is found
-            if function.is_some() {
-                let function = function.unwrap();
+            if let Some(function) = function {
                 let mut arguments = Vec::new();
 
+                // Pass the reference name as first argument
                 if is_referenced {
                     let reference_to = fn_call.reference_to.as_ref().unwrap();
                     arguments.push(BoxedValue {
@@ -270,14 +275,15 @@ pub fn resolve_reference(
                     let arg_ref =
                         resolve_reference(stack, argument.interface, argument.value.clone(), &ast);
 
-                    if arg_ref.is_some() {
-                        arguments.push(arg_ref.unwrap());
+                    if let Some(arg_ref) = arg_ref {
+                        arguments.push(arg_ref);
+                    } else {
+                        // Broken argument
                     }
                 }
-                let function_result =
-                    (function.cb)(function.arguments, arguments, function.body, &stack, &ast);
 
-                return function_result;
+                // Call the function and return it's result
+                (function.cb)(function.arguments, arguments, function.body, &stack, &ast)
             } else {
                 None
             }

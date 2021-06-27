@@ -24,8 +24,8 @@ impl FunctionsContainer for VariableDef {
     fn get_function_by_name(&self, fn_name: &str) -> Option<FunctionDef> {
         let op_fn: Option<&FunctionDef> = self.functions.get(fn_name);
 
-        if op_fn.is_some() {
-            Some(op_fn.unwrap().clone())
+        if let Some(op_fn) = op_fn {
+            Some(op_fn.clone())
         } else {
             errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
             None
@@ -36,6 +36,14 @@ impl FunctionsContainer for VariableDef {
     }
 }
 
+type FunctionAction = fn(
+    args: Vec<String>,
+    args_vals: Vec<BoxedValue>,
+    body: Vec<Box<dyn AstBase>>,
+    stack: &Mutex<Stack>,
+    ast: &MutexGuard<ast_operations::Expression>,
+) -> Option<ast_operations::BoxedValue>;
+
 /*
  * Function definition stored on the memory stack
  */
@@ -43,13 +51,7 @@ impl FunctionsContainer for VariableDef {
 pub struct FunctionDef {
     pub name: String,
     pub body: Vec<Box<dyn AstBase>>,
-    pub cb: fn(
-        args: Vec<String>,
-        args_vals: Vec<BoxedValue>,
-        body: Vec<Box<dyn AstBase>>,
-        stack: &Mutex<Stack>,
-        ast: &MutexGuard<ast_operations::Expression>,
-    ) -> Option<ast_operations::BoxedValue>,
+    pub cb: FunctionAction,
     pub expr_id: String,
     pub arguments: Vec<String>,
 }
@@ -80,12 +82,12 @@ pub struct Stack {
 
 impl FunctionsContainer for Stack {
     fn get_function_by_name(&self, fn_name: &str) -> Option<FunctionDef> {
-        for (_, function) in &self.functions {
-            if function.name == fn_name.to_string() {
+        for function in self.functions.values() {
+            if function.name == *fn_name {
                 return Some(function.clone());
             }
         }
-        return None;
+        None
     }
     fn push_function(&mut self, function: FunctionDef) {
         self.functions.insert(function.expr_id.clone(), function);
@@ -95,7 +97,7 @@ impl FunctionsContainer for Stack {
 impl Stack {
     pub fn reseve_index(&mut self) -> u64 {
         self.item_index += 1;
-        return self.item_index;
+        self.item_index
     }
 
     pub fn new(expr_id: String) -> Stack {
@@ -201,7 +203,7 @@ impl Stack {
                     thread::sleep(time);
                     None
                 },
-                expr_id: expr_id.clone(),
+                expr_id,
             },
         );
 
@@ -239,7 +241,7 @@ impl Stack {
                     value_to_string(
                         BoxedValue {
                             value: var.value.clone(),
-                            interface: var.val_type.clone()
+                            interface: var.val_type
                         },
                         &Mutex::new(self.clone())
                     )
@@ -266,7 +268,7 @@ impl Stack {
     }
 
     pub fn push_variable(&mut self, var: VariableDef) {
-        self.variables.push(var.clone());
+        self.variables.push(var);
     }
 
     /*
@@ -286,7 +288,7 @@ impl Stack {
      */
     pub fn get_variable_by_name(&self, var_name: &str) -> Option<VariableDef> {
         for variable in self.variables.iter().rev() {
-            if variable.name == var_name.to_string() {
+            if variable.name == *var_name {
                 return Some(variable.clone());
             }
         }
@@ -310,7 +312,7 @@ impl Stack {
      */
     pub fn get_mut_variable_by_name(&mut self, var_name: &str) -> Option<&mut VariableDef> {
         for variable in &mut self.variables.iter_mut().rev() {
-            if variable.name == var_name.to_string() {
+            if variable.name == *var_name {
                 return Some(variable);
             }
         }
@@ -324,9 +326,7 @@ impl Stack {
         let variable = self.get_mut_variable_by_name(var_name.as_str());
 
         // If variable exists
-        if variable.is_some() {
-            let mut variable = variable.unwrap();
-
+        if let Some(variable) = variable {
             // Is pointer
             if variable.val_type == op_codes::POINTER {
                 let variable = variable.clone();
@@ -335,8 +335,7 @@ impl Stack {
 
                 let variable_origin = self.get_mut_variable_by_id(pointer.0);
 
-                if variable_origin.is_some() {
-                    let variable_origin = variable_origin.unwrap();
+                if let Some(variable_origin) = variable_origin {
                     variable_origin.value = value.value;
                     variable_origin.val_type = value.interface;
                 } else {

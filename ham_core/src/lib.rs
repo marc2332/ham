@@ -1,7 +1,7 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, get_assignment_token_fn,
-    get_tokens_from_to_fn, AstBase, BoxedValue, ExpressionBase, FnCallBase, FnDefinitionBase,
+    get_tokens_from_to_fn, BoxedValue, ExpressionBase, FnCallBase, FnDefinitionBase,
     IfConditionalBase, VarAssignmentBase, VarDefinitionBase, WhileBase,
 };
 use crate::runtime::{
@@ -49,7 +49,7 @@ fn get_lines(code: String) -> LinesList {
     let mut lines = Vec::new();
 
     // Every line
-    for line in code.split("\n") {
+    for line in code.split('\n') {
         // Ignore // comments
         if line.starts_with("//") {
             continue;
@@ -69,7 +69,7 @@ fn get_lines(code: String) -> LinesList {
         lines.push(line_ast);
     }
 
-    return lines;
+    lines
 }
 
 /*
@@ -80,8 +80,6 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
 
     for line in lines {
         for word in line {
-            let word = String::from(word);
-
             let token_type: op_codes::Val = match word.as_str() {
                 "let" => op_codes::VAR_DEF,
                 "=" => op_codes::LEFT_ASSIGN,
@@ -109,7 +107,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
         }
     }
 
-    return tokens;
+    tokens
 }
 
 /*
@@ -117,7 +115,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
  */
 pub fn get_tokens(code: String) -> TokensList {
     let lines = self::get_lines(code);
-    return self::transform_into_tokens(lines);
+    self::transform_into_tokens(lines)
 }
 
 pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>) {
@@ -125,7 +123,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
 
     // Closure version of above
     let get_tokens_from_to = |from: usize, to: op_codes::Val| -> IndexedTokenList {
-        return get_tokens_from_to_fn(from, to, tokens.clone(), Directions::LeftToRight);
+        get_tokens_from_to_fn(from, to, tokens.clone(), Directions::LeftToRight)
     };
 
     // Get all the tokens in a group (expression blocks, arguments)
@@ -159,7 +157,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
 
     let get_assignment_token =
         |val: String, token_n: usize| -> (usize, ast_operations::BoxedValue) {
-            return get_assignment_token_fn(val, token_n, tokens.clone(), Directions::LeftToRight);
+            get_assignment_token_fn(val, token_n, tokens.clone(), Directions::LeftToRight)
         };
 
     let mut token_n = 0;
@@ -262,42 +260,45 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 let previous_token = tokens[token_n - 1].clone();
                 let next_token = tokens[token_n + 1].clone();
 
-                match next_token.ast_type {
-                    op_codes::REFERENCE => {
-                        let after_next_token = tokens[token_n + 2].clone();
+                if next_token.ast_type == op_codes::REFERENCE {
+                    let after_next_token = tokens[token_n + 2].clone();
 
-                        let reference_type = match after_next_token.ast_type {
-                            op_codes::OPEN_PARENT => op_codes::FN_CALL,
-                            _ => 0,
-                        };
+                    let reference_type = match after_next_token.ast_type {
+                        op_codes::OPEN_PARENT => op_codes::FN_CALL,
+                        _ => 0,
+                    };
 
-                        match reference_type {
-                            op_codes::FN_CALL => {
-                                let mut ast_token = ast_operations::FnCall::new(
-                                    next_token.value.clone(),
-                                    Some(previous_token.value),
-                                );
+                    match reference_type {
+                        /*
+                         * Call to functions from variables
+                         */
+                        op_codes::FN_CALL => {
+                            let mut ast_token = ast_operations::FnCall::new(
+                                next_token.value.clone(),
+                                Some(previous_token.value),
+                            );
 
-                                // Ignore itself and the (
-                                let starting_token = token_n + 2;
+                            // Ignore itself and the (
+                            let starting_token = token_n + 2;
 
-                                let arguments_tokens = get_tokens_in_group_of(
-                                    starting_token,
-                                    op_codes::OPEN_PARENT,
-                                    op_codes::CLOSE_PARENT,
-                                );
-                                let arguments =
-                                    convert_tokens_into_arguments(arguments_tokens.clone());
+                            let arguments_tokens = get_tokens_in_group_of(
+                                starting_token,
+                                op_codes::OPEN_PARENT,
+                                op_codes::CLOSE_PARENT,
+                            );
+                            let arguments = convert_tokens_into_arguments(arguments_tokens.clone());
 
-                                token_n += 2 + arguments_tokens.len();
+                            token_n += 2 + arguments_tokens.len();
 
-                                ast_token.arguments = arguments;
-                                ast_tree.body.push(Box::new(ast_token));
-                            }
-                            _ => (),
-                        };
-                    }
-                    _ => (),
+                            ast_token.arguments = arguments;
+                            ast_tree.body.push(Box::new(ast_token));
+                        }
+                        /*
+                         * TODO: Access properties from varibles
+                         */
+                        op_codes::REFERENCE => {}
+                        _ => (),
+                    };
                 }
             }
 
@@ -349,7 +350,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 let next_token = tokens[token_n + 1].clone();
 
                 // Variable name
-                let def_name = String::from(next_token.value.clone());
+                let def_name = next_token.value.clone();
 
                 // Value token position
                 let val_index = token_n + 3;
@@ -429,44 +430,34 @@ pub fn run_ast(
     let ast = ast.lock().unwrap();
 
     // Closure version of resolve_reference
-    let resolve_ref = |val_type: op_codes::Val,
-                       ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
-     -> Option<BoxedValue> {
-        return resolve_reference(stack, val_type, ref_val, &ast);
-    };
+    let resolve_ref =
+        |val_type: op_codes::Val,
+         ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
+         -> Option<BoxedValue> { resolve_reference(stack, val_type, ref_val, &ast) };
 
     // Check if a conditional is true or not
     let eval_condition = |condition_code: op_codes::Val,
                           left_val: ast_operations::BoxedValue,
                           right_val: ast_operations::BoxedValue|
      -> bool {
-        let left_val = resolve_ref(left_val.interface.clone(), left_val.value.clone());
-        let right_val = resolve_ref(right_val.interface.clone(), right_val.value.clone());
+        let left_val = resolve_ref(left_val.interface, left_val.value.clone());
+        let right_val = resolve_ref(right_val.interface, right_val.value.clone());
 
-        if left_val.is_some() && right_val.is_some() {
-            let left_val = left_val.unwrap();
-            let right_val = right_val.unwrap();
-
+        if let (Some(left_val), Some(right_val)) = (left_val, right_val) {
             match condition_code {
+                // Handle !=
                 op_codes::NOT_EQUAL_CONDITION => {
                     let left_val = value_to_string(left_val, stack).unwrap();
                     let right_val = value_to_string(right_val, stack).unwrap();
 
-                    if left_val != right_val {
-                        true
-                    } else {
-                        false
-                    }
+                    left_val != right_val
                 }
+                // Handle ==
                 op_codes::EQUAL_CONDITION => {
                     let left_val = value_to_string(left_val, stack).unwrap();
                     let right_val = value_to_string(right_val, stack).unwrap();
 
-                    if left_val == right_val {
-                        true
-                    } else {
-                        false
-                    }
+                    left_val == right_val
                 }
                 _ => false,
             }
@@ -494,7 +485,7 @@ pub fn run_ast(
                         let res =
                             eval_condition(condition.relation, condition.left, condition.right);
 
-                        if res == true {
+                        if res {
                             true_count += 1;
                         }
                     }
@@ -506,28 +497,27 @@ pub fn run_ast(
                         // Execute the expression block
                         let if_block_return = run_ast(&Mutex::new(expr), stack);
 
-                        if if_block_return.is_some() {
-                            return Some(if_block_return.unwrap());
+                        if let Some(if_block_return) = if_block_return {
+                            return Some(if_block_return);
                         }
 
                         // Clean the expression definitions from the stack
-                        stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
-                        return Some(BoxedValue {
+                        stack.lock().unwrap().drop_ops_from_id(expr_id);
+                        Some(BoxedValue {
                             value: Box::new(Boolean(false)),
                             interface: op_codes::WHILE_DEF,
-                        });
+                        })
                     } else {
-                        return None;
+                        None
                     }
                 };
 
                 let mut stopped = false;
 
-                while stopped == false {
+                while !stopped {
                     let res = check_while(while_block);
 
-                    if res.is_some() {
-                        let res = res.unwrap();
+                    if let Some(res) = res {
                         if res.interface != op_codes::WHILE_DEF {
                             return Some(res);
                         }
@@ -572,7 +562,7 @@ pub fn run_ast(
                 for condition in if_statement.conditions.clone() {
                     let res = eval_condition(condition.relation, condition.left, condition.right);
 
-                    if res == true {
+                    if res {
                         true_count += 1;
                     }
                 }
@@ -583,8 +573,8 @@ pub fn run_ast(
                     // Execute the expression block
                     let if_block_return = run_ast(&Mutex::new(expr), stack);
 
-                    if if_block_return.is_some() {
-                        return Some(if_block_return.unwrap());
+                    if let Some(if_block_return) = if_block_return {
+                        return Some(if_block_return);
                     }
 
                     // Clean the expression definitions from the stack
@@ -599,20 +589,20 @@ pub fn run_ast(
                 let function = downcast_val::<ast_operations::FnDefinition>(operation.as_self());
 
                 stack.lock().unwrap().push_function(FunctionDef {
-                    name: String::from(function.def_name.clone()),
+                    name: function.def_name.clone(),
                     body: function.body.clone(),
                     arguments: function.arguments.clone(),
-                    cb: |args, args_vals, body: Vec<Box<dyn self::AstBase>>, stack, ast| {
+                    cb: |args, args_vals, body, stack, ast| {
                         let expr = ast_operations::Expression::from_body(body.clone());
                         let expr_id = expr.expr_id.clone();
 
-                        for (i, arg) in args_vals.clone().iter().enumerate() {
+                        for (i, arg) in args_vals.iter().enumerate() {
                             let arg_name = args[i].clone();
                             let var_id = stack.lock().unwrap().reseve_index();
                             stack.lock().unwrap().push_variable(VariableDef {
                                 name: arg_name,
                                 value: arg.value.clone(),
-                                val_type: arg.interface.clone(),
+                                val_type: arg.interface,
                                 expr_id: expr_id.clone(),
                                 functions: get_methods_in_type(arg.interface),
                                 var_id,
@@ -621,19 +611,12 @@ pub fn run_ast(
 
                         let return_val = run_ast(&Mutex::new(expr), stack);
 
-                        stack.lock().unwrap().drop_ops_from_id(expr_id.clone());
+                        stack.lock().unwrap().drop_ops_from_id(expr_id);
 
-                        if return_val.is_none() {
-                            return return_val;
+                        if let Some(return_val) = return_val {
+                            resolve_reference(stack, return_val.interface, return_val.value, &ast)
                         } else {
-                            let return_val = return_val.unwrap();
-
-                            return resolve_reference(
-                                stack,
-                                return_val.interface,
-                                return_val.value,
-                                &ast,
-                            );
+                            return_val
                         }
                     },
                     // TODO: Move away from Uuid
@@ -652,28 +635,19 @@ pub fn run_ast(
 
                 let var_ref = resolve_ref(val_type, ref_val);
 
-                if var_ref.is_some() {
-                    let reference = var_ref.unwrap();
+                if let Some(var_ref) = var_ref {
+                    // Take a id for the stack
+                    let var_id = stack.lock().unwrap().reseve_index();
 
-                    if !op_codes::is_valid(reference.interface) {
-                        /*
-                         * If value code is not valid then raise an error
-                         */
-                        errors::raise_error(
-                            errors::UNHANDLED_VALUE_TYPE_CODE,
-                            vec![val_type.to_string()],
-                        )
-                    } else {
-                        let var_id = stack.lock().unwrap().reseve_index();
-                        stack.lock().unwrap().push_variable(VariableDef {
-                            name: variable.def_name.clone(),
-                            val_type: reference.interface.clone(),
-                            value: reference.value,
-                            expr_id: ast.expr_id.clone(),
-                            functions: get_methods_in_type(reference.interface),
-                            var_id,
-                        });
-                    }
+                    // Push the variable into the stack
+                    stack.lock().unwrap().push_variable(VariableDef {
+                        name: variable.def_name.clone(),
+                        val_type: var_ref.interface,
+                        value: var_ref.value,
+                        expr_id: ast.expr_id.clone(),
+                        functions: get_methods_in_type(var_ref.interface),
+                        var_id,
+                    });
                 }
             }
 
@@ -699,8 +673,7 @@ pub fn run_ast(
                     variable.assignment.value.clone(),
                 );
 
-                if ref_val.is_some() {
-                    let ref_val = ref_val.unwrap();
+                if let Some(ref_val) = ref_val {
                     stack.lock().unwrap().modify_var(variable_name, ref_val);
                 }
             }
@@ -730,8 +703,7 @@ pub fn run_ast(
                 };
 
                 // If the calling function is found
-                if function.is_some() {
-                    let function = function.unwrap();
+                if let Some(function) = function {
                     let mut arguments = Vec::new();
 
                     if is_referenced {
@@ -744,9 +716,10 @@ pub fn run_ast(
 
                     for argument in &fn_call.arguments {
                         let arg_ref = resolve_ref(argument.interface, argument.value.clone());
-                        if arg_ref.is_some() {
-                            let arg_ref = arg_ref.unwrap();
+                        if let Some(arg_ref) = arg_ref {
                             arguments.push(arg_ref);
+                        } else {
+                            // Broken argument
                         }
                     }
 
@@ -758,14 +731,10 @@ pub fn run_ast(
                         &ast,
                     );
 
-                    if res_func.is_some() {
-                        let ret_val = res_func.unwrap();
-
+                    if let Some(ret_val) = res_func {
                         let val_stringified = value_to_string(ret_val, stack);
 
-                        if val_stringified.is_ok() {
-                            let val_stringified = val_stringified.unwrap();
-
+                        if let Ok(val_stringified) = val_stringified {
                             // The function returned something that ends up not being used, throw error
 
                             errors::raise_error(

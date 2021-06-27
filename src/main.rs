@@ -6,7 +6,7 @@ use question::Question;
 use std::fs;
 use std::sync::Mutex;
 
-fn commands<'a>() -> ArgMatches {
+fn commands() -> ArgMatches {
     App::new("ham")
         .version("0.0.2")
         .author("Marc E. <mespinsanz@gmail.com>")
@@ -42,9 +42,6 @@ fn run_repl() {
 
         match answer {
             question::Answer::RESPONSE(line) => {
-                // Code
-                let line = String::from(line);
-
                 // Tokens
                 let tokens = ham_core::get_tokens(line);
 
@@ -57,7 +54,7 @@ fn run_repl() {
                 // Run the code
                 ham_core::run_ast(&tree, &stack);
 
-                print!("  <-\n");
+                println!("  <-");
             }
             question::Answer::NO | question::Answer::YES => {}
         }
@@ -69,10 +66,10 @@ fn main() {
 
     match matches.subcommand() {
         Some(("run", run_matches)) => {
-            let is_file = run_matches.value_of("file");
+            let filename = run_matches.value_of("file");
 
-            let filename = if is_file.is_some() {
-                is_file.unwrap().to_string()
+            let filename = if let Some(filename) = filename {
+                filename.to_string()
             } else {
                 format!(
                     "{}/src/main.ham",

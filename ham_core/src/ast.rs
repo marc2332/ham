@@ -439,17 +439,13 @@ pub mod ast_operations {
                 },
             ),
             // String values
-            val if val.chars().next().unwrap() == '"'
-                && val.chars().nth(val.len() - 1).unwrap() == '"' =>
-            {
-                (
-                    1,
-                    BoxedValue {
-                        interface: op_codes::STRING,
-                        value: Box::new(primitive_values::StringVal::new(val.replace('"', ""))),
-                    },
-                )
-            }
+            val if val.starts_with('"') && val.ends_with('"') => (
+                1,
+                BoxedValue {
+                    interface: op_codes::STRING,
+                    value: Box::new(primitive_values::StringVal::new(val.replace('"', ""))),
+                },
+            ),
             // References to other values (ej: referencing to a variable)
             val => {
                 if token_n < tokens.len() - 1 {
