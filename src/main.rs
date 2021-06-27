@@ -1,20 +1,14 @@
-mod ast;
-mod ham;
-mod runtime;
-mod stack;
-mod types;
-mod utils;
-
-use crate::ast::ast_operations::ExpressionBase;
-use crate::stack::Stack;
 use clap::{App, Arg, ArgMatches};
+use ham_core::ast;
+use ham_core::ast::ast_operations::ExpressionBase;
+use ham_core::stack::Stack;
 use question::Question;
 use std::fs;
 use std::sync::Mutex;
 
 fn commands<'a>() -> ArgMatches {
     App::new("ham")
-        .version("1.0")
+        .version("0.0.2")
         .author("Marc E. <mespinsanz@gmail.com>")
         .subcommand(App::new("repl"))
         .subcommand(
@@ -52,16 +46,16 @@ fn run_repl() {
                 let line = String::from(line);
 
                 // Tokens
-                let tokens = ham::get_tokens(line);
+                let tokens = ham_core::get_tokens(line);
 
                 // Ast tree root
                 let tree = Mutex::new(ast::ast_operations::Expression::new());
 
                 // Tree
-                ham::move_tokens_into_ast(tokens, &tree);
+                ham_core::move_tokens_into_ast(tokens, &tree);
 
                 // Run the code
-                ham::run_ast(&tree, &stack);
+                ham_core::run_ast(&tree, &stack);
 
                 print!("  <-\n");
             }
@@ -91,7 +85,7 @@ fn main() {
                 .expect("Something went wrong reading the file");
 
             // Tokens
-            let tokens = ham::get_tokens(filecontent);
+            let tokens = ham_core::get_tokens(filecontent);
 
             // Global context
             let global_context = ast::ast_operations::Expression::new();
@@ -103,7 +97,7 @@ fn main() {
             let tree = Mutex::new(global_context);
 
             // Tree
-            ham::move_tokens_into_ast(tokens, &tree);
+            ham_core::move_tokens_into_ast(tokens, &tree);
 
             if run_matches.is_present("show_ast_tree") {
                 println!(
@@ -112,7 +106,7 @@ fn main() {
                 );
             }
 
-            ham::run_ast(&tree, &stack);
+            ham_core::run_ast(&tree, &stack);
         }
         Some(("repl", _)) => {
             run_repl();

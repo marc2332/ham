@@ -100,12 +100,20 @@ dependencies = [
 
 [[package]]
 name = "ham"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "clap",
+ "ham_core",
+ "question",
+ "serde_json",
+]
+
+[[package]]
+name = "ham_core"
+version = "0.0.2"
+dependencies = [
  "dyn-clone",
  "erased-serde",
- "question",
  "regex",
  "serde",
  "serde_json",
