@@ -285,7 +285,7 @@ impl Stack {
      * Get a variable from the stack by its name
      */
     pub fn get_variable_by_name(&self, var_name: &str) -> Option<VariableDef> {
-        for variable in &self.variables {
+        for variable in self.variables.iter().rev() {
             if variable.name == var_name.to_string() {
                 return Some(variable.clone());
             }
@@ -309,7 +309,7 @@ impl Stack {
      * Get a mutable variable from the stack by its name
      */
     pub fn get_mut_variable_by_name(&mut self, var_name: &str) -> Option<&mut VariableDef> {
-        for variable in &mut self.variables {
+        for variable in &mut self.variables.iter_mut().rev() {
             if variable.name == var_name.to_string() {
                 return Some(variable);
             }

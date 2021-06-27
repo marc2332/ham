@@ -1,10 +1,11 @@
-fn calc(value){
-    if value == 5 {
+
+fn mod(x) {
+    if x == 5 {
         return 0
     }
-    value.mut_sum(1)
-    println(format("{}", value))
-    return calc(value)
+    x.mut_sum(1)
+    println(format("Value is -> {}", x))
+    return mod(x)
 }
 
-let _ = calc(0)
+let val = mod(0)
