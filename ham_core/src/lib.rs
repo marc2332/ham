@@ -19,8 +19,8 @@ use uuid::Uuid;
 pub mod ast;
 pub mod runtime;
 pub mod stack;
-mod types;
-mod utils;
+pub mod types;
+pub mod utils;
 
 /*
  * Split the text by the passed regex but also keep these words which are removed when splitting

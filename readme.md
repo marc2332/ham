@@ -82,6 +82,11 @@ Formatting:
 cargo fmt
 ```
 
+Testing:
+```shell
+cargo test
+```
+
 Running directly:
 ```shell
 cargo run -- run examples/demo.ham
