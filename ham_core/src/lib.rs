@@ -78,7 +78,7 @@ fn get_lines(code: String) -> LinesList {
 fn transform_into_tokens(lines: LinesList) -> TokensList {
     let mut tokens = Vec::new();
 
-    for line in lines {
+    for (i, line) in lines.iter().enumerate() {
         for word in line {
             let token_type: op_codes::Val = match word.as_str() {
                 "let" => op_codes::VAR_DEF,
@@ -101,6 +101,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
             let ast_token = Token {
                 ast_type: token_type,
                 value: word.clone(),
+                line: i + 1,
             };
 
             tokens.push(ast_token);
@@ -367,9 +368,9 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
             }
             // References (fn calls, variable reassignation...)
             op_codes::REFERENCE => {
-                let next_token = tokens[token_n + 1].ast_type;
+                let next_token = &tokens[token_n + 1];
 
-                let reference_type = match next_token {
+                let reference_type = match next_token.ast_type {
                     op_codes::OPEN_PARENT => op_codes::FN_CALL,
                     op_codes::LEFT_ASSIGN => op_codes::VAR_ASSIGN,
                     _ => 0,

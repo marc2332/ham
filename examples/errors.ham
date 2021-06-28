@@ -1,0 +1,24 @@
+
+fn invalid(){
+    let val = 6
+    return &val
+}
+
+// 3. Broken argument (Variable not found)
+fn foo(x){
+
+// 4. Broken pointer
+    invalid(x)
+    fee()
+    return 5
+}
+
+// 2. Unused returned value
+foo()
+
+
+
+
+
+
+

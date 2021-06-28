@@ -2,6 +2,7 @@
 pub struct Token {
     pub ast_type: usize,
     pub value: String,
+    pub line: usize,
 }
 
 pub type LinesList = Vec<Vec<String>>;

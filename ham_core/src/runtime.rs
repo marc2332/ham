@@ -1,8 +1,9 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::BoxedValue;
 use crate::stack::{FunctionDef, FunctionsContainer, Stack};
+use crate::utils::errors::raise_error;
 use crate::utils::primitive_values::{Number, NumberValueBase, StringVal};
-use crate::utils::{op_codes, primitive_values};
+use crate::utils::{errors, op_codes, primitive_values};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
@@ -182,12 +183,17 @@ pub fn resolve_reference(
     match val_type {
         op_codes::POINTER => {
             let pointer = downcast_val::<primitive_values::Pointer>(ref_val.as_self()).0;
-            let variable = stack.lock().unwrap().get_variable_by_id(pointer).unwrap();
+            let variable = stack.lock().unwrap().get_variable_by_id(pointer);
 
-            Some(BoxedValue {
-                value: variable.value,
-                interface: variable.val_type,
-            })
+            if let Some(variable) = variable {
+                Some(BoxedValue {
+                    value: variable.value,
+                    interface: variable.val_type,
+                })
+            } else {
+                raise_error(errors::BROKEN_POINTER, vec![pointer.to_string()]);
+                None
+            }
         }
         op_codes::STRING => Some(BoxedValue {
             interface: val_type,
@@ -202,21 +208,20 @@ pub fn resolve_reference(
             value: ref_val,
         }),
         op_codes::REFERENCE => {
-            let mut variable_name = downcast_val::<ast_operations::Reference>(ref_val.as_self())
-                .0
-                .clone();
+            let mut referenced_variable =
+                downcast_val::<ast_operations::Reference>(ref_val.as_self()).clone();
 
-            let is_pointer = variable_name.starts_with('&');
+            let is_pointer = referenced_variable.0.starts_with('&');
 
             if is_pointer {
                 // Remove & from it's name
-                variable_name.remove(0);
+                referenced_variable.0.remove(0);
             }
 
             let variable = stack
                 .lock()
                 .unwrap()
-                .get_variable_by_name(variable_name.as_str());
+                .get_variable_by_name(referenced_variable.0.as_str());
 
             if let Some(variable) = variable {
                 if is_pointer {
@@ -233,6 +238,7 @@ pub fn resolve_reference(
                     })
                 }
             } else {
+                raise_error(errors::VARIABLE_NOT_FOUND, vec![referenced_variable.0]);
                 None
             }
         }

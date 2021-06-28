@@ -166,8 +166,10 @@ pub mod primitive_values {
         }
     }
 }
-//get_tokens_in_group_of(starting_token, op_codes::OPEN_PARENT, op_codes::CLOSE_PARENT)
+
 pub mod errors {
+
+    use colored::*;
 
     pub type ErrorVal = usize;
 
@@ -177,42 +179,37 @@ pub mod errors {
     // Variable wasn't found in the current scope
     pub const VARIABLE_NOT_FOUND: ErrorVal = 1;
 
-    // Unhandled value
-    pub const UNHANDLED_VALUE: ErrorVal = 2;
-
-    // Unhandled value type
-    pub const UNHANDLED_VALUE_TYPE_CODE: ErrorVal = 3;
-
     // Not used returned value
-    pub const RETURNED_VALUE_NOT_USED: ErrorVal = 4;
+    pub const RETURNED_VALUE_NOT_USED: ErrorVal = 2;
 
-    // Error when receiving an argument
-    pub const BROKEN_ARGUMENT: ErrorVal = 5;
+    // Pointer points to an invalid reference
+    pub const BROKEN_POINTER: ErrorVal = 3;
 
     pub fn raise_error(kind: ErrorVal, args: Vec<String>) {
         let msg = match kind {
-            FUNCTION_NOT_FOUND => format!("Function <{}> was not found", args[0]),
-            VARIABLE_NOT_FOUND => format!("Variable <{}> was not found", args[0]),
-            UNHANDLED_VALUE => format!("Value <{}> is not handled", args[0]),
-            UNHANDLED_VALUE_TYPE_CODE => {
-                format!("Value type by code <{}> is not handled", args[0])
-            }
+            FUNCTION_NOT_FOUND => format!("Function '{}' was not found", args[0]),
+            VARIABLE_NOT_FOUND => format!("Variable '{}' was not found", args[0].blue()),
             RETURNED_VALUE_NOT_USED => {
                 format!(
-                    "\n
-    Returned value <{}> by function <{}> is not used\n
+                    "Returned value '{}' by function '{}' is not used\n
     let value = {}({});
     ¯¯¯¯¯¯¯¯¯
-    ↑ Help, Assign the return value to a variable. ",
-                    args[0], args[1], args[1], args[2]
+    ↑ Help: Assign the return value to a variable. ",
+                    args[0].blue(),
+                    args[1].blue(),
+                    args[1].blue(),
+                    args[2]
                 )
             }
-            BROKEN_ARGUMENT => {
-                format!("Argument by code <{}> couldn't be handled", args[0])
+            BROKEN_POINTER => {
+                format!(
+                    "Pointer points to variable by id '{}' which does no longer exist.",
+                    args[0].blue()
+                )
             }
             _ => String::from("Unhandled error"),
         };
 
-        println!(" \n :: Error :: {}", msg);
+        println!("{}: {}", "Error".red(), msg);
     }
 }

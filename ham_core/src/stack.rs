@@ -87,6 +87,7 @@ impl FunctionsContainer for Stack {
                 return Some(function.clone());
             }
         }
+        errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
         None
     }
     fn push_function(&mut self, function: FunctionDef) {
