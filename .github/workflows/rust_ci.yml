@@ -24,9 +24,9 @@ jobs:
      - name: Build
        uses: actions-rs/cargo@v1
        with:
-         command: build --verbose
+         command: build
 
      - name: Run tests
        uses: actions-rs/cargo@v1
        with:
-         command: test --verbose
+         command: test
