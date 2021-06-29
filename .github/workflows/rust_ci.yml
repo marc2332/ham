@@ -23,8 +23,10 @@ jobs:
 
      - name: Build
        uses: actions-rs/cargo@v1
-       run: build --verbose
+       with:
+         command: build --verbose
 
      - name: Run tests
        uses: actions-rs/cargo@v1
-       run: test --verbose
+       with:
+         command: test --verbose
