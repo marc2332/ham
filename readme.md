@@ -1,5 +1,7 @@
 🍖 ham, a programming language made in Rust 
 
+**NOTE: I'm learning rust, I am still a noob**
+
 status: **alpha**
 
 You can **download** it from [here](https://github.com/marc2332/ham/releases).
