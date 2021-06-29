@@ -17,7 +17,7 @@ You can **download** it from [here](https://github.com/marc2332/ham/releases).
 
 ### Project ideas
 - CD integration to release a new version in each commit
-- CI integration to run some tests
+- More unit tests
 
 ### Example
 
