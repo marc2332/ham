@@ -5,6 +5,7 @@ use ham_core::stack::Stack;
 use ham_manager::Manifest;
 use question::Question;
 use std::fs;
+use std::path::Path;
 use std::sync::Mutex;
 
 fn commands() -> ArgMatches {
@@ -32,6 +33,9 @@ fn run_repl() {
 
     println!("{}\n{}", cli_welcome, cli_tip);
 
+    // CWD
+    let cwd = std::env::current_dir().unwrap().display().to_string();
+
     // Global context
     let global_context = ast::ast_operations::Expression::new();
 
@@ -50,7 +54,7 @@ fn run_repl() {
                 let tree = Mutex::new(ast::ast_operations::Expression::new());
 
                 // Tree
-                ham_core::move_tokens_into_ast(tokens, &tree);
+                ham_core::move_tokens_into_ast(tokens, &tree, cwd.clone());
 
                 // Run the code
                 ham_core::run_ast(&tree, &stack);
@@ -81,7 +85,7 @@ fn main() {
 
             // Main file
             let filename = if let Some(filename) = filename {
-                filename.to_string()
+                format!("{}/{}", cwd, filename.to_string())
             } else {
                 format!("{}/src/main.ham", cwd)
             };
@@ -102,8 +106,15 @@ fn main() {
             // Ast tree root
             let tree = Mutex::new(global_context);
 
+            // File's folder
+            let mut filedir = Path::new(filename.as_str()).ancestors();
+            filedir.next().unwrap();
+
+            let filedir = filedir.next().unwrap();
+            let filedir = filedir.to_str().unwrap().to_string();
+
             // Tree
-            ham_core::move_tokens_into_ast(tokens, &tree);
+            ham_core::move_tokens_into_ast(tokens, &tree, filedir);
 
             if run_matches.is_present("show_ast_tree") {
                 println!(

@@ -1,0 +1,10 @@
+
+fn test(){
+    import module from "./module.ham"
+
+    module.x("World")
+}
+
+test()
+
+

@@ -49,6 +49,23 @@ pub mod ast_operations {
         }
     }
 
+    /* MODULE STATEMENT */
+
+    #[derive(Clone, Debug, Serialize)]
+    pub struct Module {
+        pub name: String,
+        pub functions: Vec<FnDefinition>,
+    }
+
+    impl AstBase for Module {
+        fn get_type(&self) -> usize {
+            op_codes::MODULE
+        }
+        fn as_self(&self) -> &dyn Any {
+            self
+        }
+    }
+
     /* RETURN STATEMENT */
 
     #[derive(Clone, Debug, Serialize)]

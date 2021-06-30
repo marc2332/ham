@@ -1,7 +1,7 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, get_assignment_token_fn,
-    get_tokens_from_to_fn, BoxedValue, ExpressionBase, FnCallBase, FnDefinitionBase,
+    get_tokens_from_to_fn, BoxedValue, ExpressionBase, FnCallBase, FnDefinition, FnDefinitionBase,
     IfConditionalBase, VarAssignmentBase, VarDefinitionBase, WhileBase,
 };
 use crate::runtime::{
@@ -13,6 +13,8 @@ use crate::utils::op_codes::Directions;
 use crate::utils::primitive_values::{Boolean, StringVal};
 use crate::utils::{errors, op_codes, primitive_values};
 use regex::Regex;
+use std::collections::HashMap;
+use std::fs;
 use std::sync::Mutex;
 use uuid::Uuid;
 
@@ -95,6 +97,8 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "," => op_codes::COMMA_DELIMITER,
                 "while" => op_codes::WHILE_DEF,
                 "!=" => op_codes::NOT_EQUAL_CONDITION,
+                "import" => op_codes::IMPORT,
+                "::" => op_codes::MODULE_ACCESS,
                 _ => op_codes::REFERENCE,
             };
 
@@ -119,7 +123,11 @@ pub fn get_tokens(code: String) -> TokensList {
     self::transform_into_tokens(lines)
 }
 
-pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations::Expression>) {
+pub fn move_tokens_into_ast(
+    tokens: TokensList,
+    ast_tree: &Mutex<ast_operations::Expression>,
+    filedir: String,
+) {
     let mut ast_tree = ast_tree.lock().unwrap();
 
     // Closure version of above
@@ -166,6 +174,45 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
         match current_token.ast_type {
+            // Import statement
+            op_codes::IMPORT => {
+                let module_name = &tokens[token_n + 1].value;
+                let module_origin = &tokens[token_n + 3].value;
+
+                // Module's path
+                let filepath = format!("{}/{}", filedir, module_origin.replace('"', ""));
+
+                let filecontent = fs::read_to_string(filepath.as_str());
+
+                if let Ok(filecontent) = filecontent {
+                    let tokens = get_tokens(filecontent);
+
+                    let scope_tree = Mutex::new(ast_operations::Expression::new());
+                    move_tokens_into_ast(tokens.clone(), &scope_tree, filedir.clone());
+
+                    // All functions are public by default
+                    let mut public_functions = Vec::new();
+
+                    for op in scope_tree.lock().unwrap().body.iter() {
+                        if op.get_type() == op_codes::FN_DEF {
+                            public_functions.push(
+                                downcast_val::<ast_operations::FnDefinition>(op.as_self()).clone(),
+                            );
+                        }
+                    }
+
+                    let module = ast_operations::Module {
+                        name: module_name.to_string(),
+                        functions: public_functions,
+                    };
+
+                    ast_tree.body.push(Box::new(module));
+                } else {
+                }
+
+                token_n = 5
+            }
+
             // While block
             op_codes::WHILE_DEF => {
                 // Get the if condition tokens
@@ -194,7 +241,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 );
 
                 // Move the tokens into the tree
-                move_tokens_into_ast(block_tokens.clone(), &scope_tree);
+                move_tokens_into_ast(block_tokens.clone(), &scope_tree, filedir.clone());
 
                 // Ignore the whilte body
                 token_n = block_tokens.len() + open_block_index + 1;
@@ -246,7 +293,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 );
 
                 // Move the tokens into the tree
-                move_tokens_into_ast(block_tokens.clone(), &scope_tree);
+                move_tokens_into_ast(block_tokens.clone(), &scope_tree, filedir.clone());
 
                 // Ignore the block body
                 token_n = block_tokens.len() + open_block_index + 1;
@@ -335,7 +382,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
                 );
 
                 // Move the tokens into the tree
-                move_tokens_into_ast(block_tokens.clone(), &scope_tree);
+                move_tokens_into_ast(block_tokens.clone(), &scope_tree, filedir.clone());
 
                 // Ignore the function body
                 token_n = block_tokens.len() + open_block_index + 1;
@@ -424,6 +471,43 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<ast_operations:
     }
 }
 
+fn get_function_from_def(function: &FnDefinition) -> FunctionDef {
+    FunctionDef {
+        name: function.def_name.clone(),
+        body: function.body.clone(),
+        arguments: function.arguments.clone(),
+        cb: |args, args_vals, body, stack, ast| {
+            let expr = ast_operations::Expression::from_body(body.clone());
+            let expr_id = expr.expr_id.clone();
+
+            for (i, arg) in args_vals.iter().enumerate() {
+                let arg_name = args[i].clone();
+                let var_id = stack.lock().unwrap().reseve_index();
+                stack.lock().unwrap().push_variable(VariableDef {
+                    name: arg_name,
+                    value: arg.value.clone(),
+                    val_type: arg.interface,
+                    expr_id: expr_id.clone(),
+                    functions: get_methods_in_type(arg.interface),
+                    var_id,
+                })
+            }
+
+            let return_val = run_ast(&Mutex::new(expr), stack);
+
+            stack.lock().unwrap().drop_ops_from_id(expr_id);
+
+            if let Some(return_val) = return_val {
+                resolve_reference(stack, return_val.interface, return_val.value, &ast)
+            } else {
+                return_val
+            }
+        },
+        // TODO: Move away from Uuid
+        expr_id: Uuid::new_v4().to_string(),
+    }
+}
+
 pub fn run_ast(
     ast: &Mutex<ast_operations::Expression>,
     stack: &Mutex<Stack>,
@@ -469,6 +553,33 @@ pub fn run_ast(
 
     for operation in &ast.body {
         match operation.get_type() {
+            /*
+             * Handle module definitions
+             */
+            op_codes::MODULE => {
+                let module = downcast_val::<ast_operations::Module>(operation.as_self());
+
+                let var_id = stack.lock().unwrap().reseve_index();
+
+                let mut functions = HashMap::new();
+
+                for function in &module.functions {
+                    let mut function = function.clone();
+                    function.arguments.insert(0, "_".to_string());
+                    functions.insert(function.def_name.clone(), get_function_from_def(&function));
+                }
+
+                // Push the variable into the stack
+                stack.lock().unwrap().push_variable(VariableDef {
+                    name: module.name.clone(),
+                    val_type: op_codes::STRING,
+                    value: Box::new(primitive_values::StringVal(module.name.clone())),
+                    expr_id: ast.expr_id.clone(),
+                    functions,
+                    var_id,
+                });
+            }
+
             /*
              * Handle if block
              */
@@ -589,40 +700,10 @@ pub fn run_ast(
             op_codes::FN_DEF => {
                 let function = downcast_val::<ast_operations::FnDefinition>(operation.as_self());
 
-                stack.lock().unwrap().push_function(FunctionDef {
-                    name: function.def_name.clone(),
-                    body: function.body.clone(),
-                    arguments: function.arguments.clone(),
-                    cb: |args, args_vals, body, stack, ast| {
-                        let expr = ast_operations::Expression::from_body(body.clone());
-                        let expr_id = expr.expr_id.clone();
-
-                        for (i, arg) in args_vals.iter().enumerate() {
-                            let arg_name = args[i].clone();
-                            let var_id = stack.lock().unwrap().reseve_index();
-                            stack.lock().unwrap().push_variable(VariableDef {
-                                name: arg_name,
-                                value: arg.value.clone(),
-                                val_type: arg.interface,
-                                expr_id: expr_id.clone(),
-                                functions: get_methods_in_type(arg.interface),
-                                var_id,
-                            })
-                        }
-
-                        let return_val = run_ast(&Mutex::new(expr), stack);
-
-                        stack.lock().unwrap().drop_ops_from_id(expr_id);
-
-                        if let Some(return_val) = return_val {
-                            resolve_reference(stack, return_val.interface, return_val.value, &ast)
-                        } else {
-                            return_val
-                        }
-                    },
-                    // TODO: Move away from Uuid
-                    expr_id: Uuid::new_v4().to_string(),
-                });
+                stack
+                    .lock()
+                    .unwrap()
+                    .push_function(get_function_from_def(function));
             }
 
             /*

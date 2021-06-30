@@ -35,6 +35,9 @@ pub mod op_codes {
     pub const WHILE_DEF: Val = 20;
     pub const NOT_EQUAL_CONDITION: Val = 21; // !=
     pub const POINTER: Val = 22;
+    pub const IMPORT: Val = 23;
+    pub const MODULE: Val = 24;
+    pub const MODULE_ACCESS: Val = 25; // ::
 }
 
 pub mod primitive_values {
