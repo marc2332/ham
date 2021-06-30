@@ -2,6 +2,7 @@ use clap::{App, Arg, ArgMatches};
 use ham_core::ast;
 use ham_core::ast::ast_operations::ExpressionBase;
 use ham_core::stack::Stack;
+use ham_manager::Manifest;
 use question::Question;
 use std::fs;
 use std::sync::Mutex;
@@ -66,18 +67,26 @@ fn main() {
 
     match matches.subcommand() {
         Some(("run", run_matches)) => {
+            // CWD
+            let cwd = std::env::current_dir().unwrap().display().to_string();
+
             let filename = run_matches.value_of("file");
 
+            // Manifest file
+            let _manifest = {
+                let manifest_file = format!("{}/ham.yml", cwd);
+
+                Manifest::from_file(manifest_file.as_str())
+            };
+
+            // Main file
             let filename = if let Some(filename) = filename {
                 filename.to_string()
             } else {
-                format!(
-                    "{}/src/main.ham",
-                    std::env::current_dir().unwrap().display()
-                )
+                format!("{}/src/main.ham", cwd)
             };
 
-            // File content
+            // Main file content
             let filecontent = fs::read_to_string(filename.as_str())
                 .expect("Something went wrong reading the file");
 

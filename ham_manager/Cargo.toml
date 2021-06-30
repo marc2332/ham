@@ -1,0 +1,8 @@
+[package]
+name = "ham_manager"
+version = "0.0.1"
+edition = "2018"
+authors = ["Marc Espín Sanz"]
+
+[dependencies]
+yaml-rust = "0.4.5"

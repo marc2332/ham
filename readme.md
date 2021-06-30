@@ -13,7 +13,11 @@ You can **download** it from [here](https://github.com/marc2332/ham/releases).
 
 ### Language Ideas
 - Rust interoperability
-- Ability to import externals files
+- Manifest file
+- Ability to import files from:
+  - Local file system
+  - HTTP urls
+  - By name (this would use some kind of remote registry to translate it to HTTP urls)
 - std library
 - Low-level (networking, file system...) APIs
 
