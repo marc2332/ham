@@ -17,5 +17,8 @@ impl Token {
 
 pub type LinesList = Vec<Vec<String>>;
 pub type TokensList = Vec<Token>;
-
 pub type IndexedTokenList = Vec<(usize, Token)>;
+
+// Boxed primitive value
+use crate::utils::primitive_values::PrimitiveValueBase;
+pub type BoxedPrimitiveValue = Box<dyn PrimitiveValueBase>;

@@ -8,7 +8,7 @@ use crate::runtime::{
     downcast_val, get_methods_in_type, resolve_reference, value_to_string, values_to_strings,
 };
 use crate::stack::{FunctionDef, FunctionsContainer, Stack, VariableDef};
-use crate::types::{IndexedTokenList, LinesList, Token, TokensList};
+use crate::types::{BoxedPrimitiveValue, IndexedTokenList, LinesList, Token, TokensList};
 use crate::utils::op_codes::Directions;
 use crate::utils::primitive_values::StringVal;
 use crate::utils::{errors, op_codes, primitive_values};
@@ -540,9 +540,9 @@ pub fn run_ast(
 
     // Closure version of resolve_reference
     let resolve_ref =
-        |val_type: op_codes::Val,
-         ref_val: Box<dyn primitive_values::PrimitiveValueBase>|
-         -> Option<BoxedValue> { resolve_reference(stack, val_type, ref_val, &ast) };
+        |val_type: op_codes::Val, ref_val: BoxedPrimitiveValue| -> Option<BoxedValue> {
+            resolve_reference(stack, val_type, ref_val, &ast)
+        };
 
     // Check if a conditional is true or not
     let eval_condition = |condition_code: op_codes::Val,

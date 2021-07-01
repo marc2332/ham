@@ -1,6 +1,7 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::BoxedValue;
 use crate::stack::{FunctionDef, FunctionsContainer, Stack};
+use crate::types::BoxedPrimitiveValue;
 use crate::utils::errors::raise_error;
 use crate::utils::primitive_values::{Number, NumberValueBase, StringVal};
 use crate::utils::{errors, op_codes, primitive_values};
@@ -177,7 +178,7 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
 pub fn resolve_reference(
     stack: &Mutex<Stack>,
     val_type: op_codes::Val,
-    ref_val: Box<dyn primitive_values::PrimitiveValueBase>,
+    ref_val: BoxedPrimitiveValue,
     ast: &MutexGuard<ast_operations::Expression>,
 ) -> Option<BoxedValue> {
     match val_type {
