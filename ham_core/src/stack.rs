@@ -27,7 +27,7 @@ impl FunctionsContainer for VariableDef {
         if let Some(op_fn) = op_fn {
             Some(op_fn.clone())
         } else {
-            errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
+            errors::raise_error(errors::CODES::FunctionNotFound, vec![fn_name.to_string()]);
             None
         }
     }
@@ -87,7 +87,7 @@ impl FunctionsContainer for Stack {
                 return Some(function.clone());
             }
         }
-        errors::raise_error(errors::FUNCTION_NOT_FOUND, vec![fn_name.to_string()]);
+        errors::raise_error(errors::CODES::FunctionNotFound, vec![fn_name.to_string()]);
         None
     }
     fn push_function(&mut self, function: FunctionDef) {
@@ -346,7 +346,7 @@ impl Stack {
                 variable.value = value.value;
             }
         } else {
-            errors::raise_error(errors::VARIABLE_NOT_FOUND, vec![var_name.clone()]);
+            errors::raise_error(errors::CODES::VariableNotFound, vec![var_name.clone()]);
         }
     }
 }

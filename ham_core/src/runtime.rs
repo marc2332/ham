@@ -191,7 +191,7 @@ pub fn resolve_reference(
                     interface: variable.val_type,
                 })
             } else {
-                raise_error(errors::BROKEN_POINTER, vec![pointer.to_string()]);
+                raise_error(errors::CODES::BrokenPointer, vec![pointer.to_string()]);
                 None
             }
         }
@@ -238,7 +238,7 @@ pub fn resolve_reference(
                     })
                 }
             } else {
-                raise_error(errors::VARIABLE_NOT_FOUND, vec![referenced_variable.0]);
+                raise_error(errors::CODES::VariableNotFound, vec![referenced_variable.0]);
                 None
             }
         }

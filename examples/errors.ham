@@ -1,4 +1,10 @@
 
+// 5. Module not found
+import e from "./wow.ham"
+
+// 6. Unexpected keyword
+import c blup "./module.ham"
+
 fn invalid(){
     let val = 6
     return &val

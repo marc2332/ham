@@ -37,7 +37,7 @@ pub mod op_codes {
     pub const POINTER: Val = 22;
     pub const IMPORT: Val = 23;
     pub const MODULE: Val = 24;
-    pub const MODULE_ACCESS: Val = 25; // ::
+    pub const FROM_MODULE: Val = 25; // from
 }
 
 pub mod primitive_values {
@@ -174,25 +174,31 @@ pub mod errors {
 
     use colored::*;
 
-    pub type ErrorVal = usize;
+    pub enum CODES {
+        // Function wasn't found in the current scope
+        FunctionNotFound,
 
-    // Function wasn't found in the current scope
-    pub const FUNCTION_NOT_FOUND: ErrorVal = 0;
+        // Variable wasn't found in the current scope
+        VariableNotFound,
 
-    // Variable wasn't found in the current scope
-    pub const VARIABLE_NOT_FOUND: ErrorVal = 1;
+        // Not used returned value
+        ReturnedValueNotUsed,
 
-    // Not used returned value
-    pub const RETURNED_VALUE_NOT_USED: ErrorVal = 2;
+        // Pointer points to an invalid reference
+        BrokenPointer,
 
-    // Pointer points to an invalid reference
-    pub const BROKEN_POINTER: ErrorVal = 3;
+        // Module is not found (ex, file's path is not correct)
+        ModuleNotFound,
 
-    pub fn raise_error(kind: ErrorVal, args: Vec<String>) {
+        // Got a keyword instead of another one
+        UnexpectedKeyword,
+    }
+
+    pub fn raise_error(kind: CODES, args: Vec<String>) {
         let msg = match kind {
-            FUNCTION_NOT_FOUND => format!("Function '{}' was not found", args[0]),
-            VARIABLE_NOT_FOUND => format!("Variable '{}' was not found", args[0].blue()),
-            RETURNED_VALUE_NOT_USED => {
+            CODES::FunctionNotFound => format!("Function '{}' was not found", args[0]),
+            CODES::VariableNotFound => format!("Variable '{}' was not found", args[0].blue()),
+            CODES::ReturnedValueNotUsed => {
                 format!(
                     "Returned value '{}' by function '{}' is not used\n
     let value = {}({});
@@ -204,13 +210,18 @@ pub mod errors {
                     args[2]
                 )
             }
-            BROKEN_POINTER => {
+            CODES::BrokenPointer => {
                 format!(
                     "Pointer points to variable by id '{}' which does no longer exist.",
                     args[0].blue()
                 )
             }
-            _ => String::from("Unhandled error"),
+            CODES::ModuleNotFound => {
+                format!("There is no module in path '{}'", args[0].blue())
+            }
+            CODES::UnexpectedKeyword => {
+                format!("Unexpected keyword '{}'", args[0].blue())
+            }
         };
 
         println!("{}: {}", "Error".red(), msg);

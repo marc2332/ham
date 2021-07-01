@@ -98,7 +98,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "while" => op_codes::WHILE_DEF,
                 "!=" => op_codes::NOT_EQUAL_CONDITION,
                 "import" => op_codes::IMPORT,
-                "::" => op_codes::MODULE_ACCESS,
+                "from" => op_codes::FROM_MODULE,
                 _ => op_codes::REFERENCE,
             };
 
@@ -177,20 +177,36 @@ pub fn move_tokens_into_ast(
             // Import statement
             op_codes::IMPORT => {
                 let module_name = &tokens[token_n + 1].value;
+                let module_direction = &tokens[token_n + 2];
                 let module_origin = &tokens[token_n + 3].value;
+                /*
+                 * import x from "./x.ham"
+                 *
+                 * module_name: x
+                 * module_direction: from
+                 * module_origin= "./x.ham"
+                 */
 
+                if module_direction.ast_type != op_codes::FROM_MODULE {
+                    errors::raise_error(
+                        errors::CODES::UnexpectedKeyword,
+                        vec![module_direction.value.clone()],
+                    )
+                }
                 // Module's path
                 let filepath = format!("{}/{}", filedir, module_origin.replace('"', ""));
 
+                // Module's code
                 let filecontent = fs::read_to_string(filepath.as_str());
 
                 if let Ok(filecontent) = filecontent {
                     let tokens = get_tokens(filecontent);
 
+                    // Move all the tokens into a expression
                     let scope_tree = Mutex::new(ast_operations::Expression::new());
                     move_tokens_into_ast(tokens.clone(), &scope_tree, filedir.clone());
 
-                    // All functions are public by default
+                    // Copy all root-functions (public by default) from the expression body to the vector
                     let mut public_functions = Vec::new();
 
                     for op in scope_tree.lock().unwrap().body.iter() {
@@ -208,9 +224,10 @@ pub fn move_tokens_into_ast(
 
                     ast_tree.body.push(Box::new(module));
                 } else {
+                    errors::raise_error(errors::CODES::ModuleNotFound, vec![filepath])
                 }
 
-                token_n = 5
+                token_n += 4
             }
 
             // While block
@@ -820,7 +837,7 @@ pub fn run_ast(
                             // The function returned something that ends up not being used, throw error
 
                             errors::raise_error(
-                                errors::RETURNED_VALUE_NOT_USED,
+                                errors::CODES::ReturnedValueNotUsed,
                                 vec![
                                     val_stringified,
                                     fn_call.fn_name.clone(),
