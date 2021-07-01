@@ -1,4 +1,18 @@
 
+fn until(x){
+    let c = 0
+    while c != x {
+        println(c)
+        if c == 2 {
+            break
+        }
+        c.mut_sum(1)
+    }
+    return c
+}
+
+println(format("result is -> {}", until(5)))
+
 fn mod(x) {
     if x == 5 {
         return 0

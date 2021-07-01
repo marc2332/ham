@@ -21,6 +21,36 @@ pub mod ast_operations {
     serialize_trait_object!(AstBase);
 
     /*
+     * Break statement
+     *
+     * Used to break from while loops
+     *
+     */
+
+    #[derive(Clone, Debug, Serialize)]
+    pub struct Break();
+
+    // Implement base methods for REFERENCE
+    impl AstBase for Break {
+        fn get_type(&self) -> usize {
+            op_codes::BREAK
+        }
+        fn as_self(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    pub trait BreakBase {
+        fn new() -> Self;
+    }
+
+    impl BreakBase for Break {
+        fn new() -> Self {
+            Self()
+        }
+    }
+
+    /*
      * Reference by name
      *
      * This happens when a variable instead of having an static value,

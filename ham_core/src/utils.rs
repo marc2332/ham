@@ -38,6 +38,7 @@ pub mod op_codes {
     pub const IMPORT: Val = 23;
     pub const MODULE: Val = 24;
     pub const FROM_MODULE: Val = 25; // from
+    pub const BREAK: Val = 26; // break
 }
 
 pub mod primitive_values {

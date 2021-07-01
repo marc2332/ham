@@ -1,8 +1,8 @@
 use crate::ast::ast_operations;
 use crate::ast::ast_operations::{
     convert_tokens_into_arguments, convert_tokens_into_res_expressions, get_assignment_token_fn,
-    get_tokens_from_to_fn, BoxedValue, ExpressionBase, FnCallBase, FnDefinition, FnDefinitionBase,
-    IfConditionalBase, VarAssignmentBase, VarDefinitionBase, WhileBase,
+    get_tokens_from_to_fn, BoxedValue, BreakBase, ExpressionBase, FnCallBase, FnDefinition,
+    FnDefinitionBase, IfConditionalBase, VarAssignmentBase, VarDefinitionBase, WhileBase,
 };
 use crate::runtime::{
     downcast_val, get_methods_in_type, resolve_reference, value_to_string, values_to_strings,
@@ -10,7 +10,7 @@ use crate::runtime::{
 use crate::stack::{FunctionDef, FunctionsContainer, Stack, VariableDef};
 use crate::types::{IndexedTokenList, LinesList, Token, TokensList};
 use crate::utils::op_codes::Directions;
-use crate::utils::primitive_values::{Boolean, StringVal};
+use crate::utils::primitive_values::StringVal;
 use crate::utils::{errors, op_codes, primitive_values};
 use regex::Regex;
 use std::collections::HashMap;
@@ -99,6 +99,7 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
                 "!=" => op_codes::NOT_EQUAL_CONDITION,
                 "import" => op_codes::IMPORT,
                 "from" => op_codes::FROM_MODULE,
+                "break" => op_codes::BREAK,
                 _ => op_codes::REFERENCE,
             };
 
@@ -174,6 +175,12 @@ pub fn move_tokens_into_ast(
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
         match current_token.ast_type {
+            op_codes::BREAK => {
+                let break_ast = ast_operations::Break::new();
+                ast_tree.body.push(Box::new(break_ast));
+                token_n += 1;
+            }
+
             // Import statement
             op_codes::IMPORT => {
                 let module_name = &tokens[token_n + 1].value;
@@ -571,6 +578,16 @@ pub fn run_ast(
     for operation in &ast.body {
         match operation.get_type() {
             /*
+             * Handle breaks
+             */
+            op_codes::BREAK => {
+                return Some(BoxedValue {
+                    interface: op_codes::BREAK,
+                    value: Box::new(primitive_values::StringVal("break".to_string())),
+                })
+            }
+
+            /*
              * Handle module definitions
              */
             op_codes::MODULE => {
@@ -626,6 +643,9 @@ pub fn run_ast(
                         // Execute the expression block
                         let if_block_return = run_ast(&Mutex::new(expr), stack);
 
+                        /*
+                         * While's loop will stop when something is returned forcefully
+                         */
                         if let Some(if_block_return) = if_block_return {
                             return Some(if_block_return);
                         }
@@ -633,7 +653,7 @@ pub fn run_ast(
                         // Clean the expression definitions from the stack
                         stack.lock().unwrap().drop_ops_from_id(expr_id);
                         Some(BoxedValue {
-                            value: Box::new(Boolean(false)),
+                            value: Box::new(StringVal("while".to_string())),
                             interface: op_codes::WHILE_DEF,
                         })
                     } else {
@@ -647,8 +667,18 @@ pub fn run_ast(
                     let res = check_while(while_block);
 
                     if let Some(res) = res {
-                        if res.interface != op_codes::WHILE_DEF {
-                            return Some(res);
+                        match res.interface {
+                            op_codes::WHILE_DEF => {
+                                // Ignore non-returning whiles
+                            }
+                            op_codes::BREAK => {
+                                // Simply stop the while
+                                stopped = true;
+                            }
+                            _ => {
+                                // Stop and return the value
+                                return Some(res);
+                            }
                         }
                     } else {
                         stopped = true;
