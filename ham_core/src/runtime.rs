@@ -82,88 +82,28 @@ pub fn values_to_strings(values: Vec<BoxedValue>, stack: &Mutex<Stack>) -> Vec<S
 pub fn get_methods_in_type(val_type: Ops) -> HashMap<String, FunctionDef> {
     let mut res = HashMap::new();
 
+    /*
+     * map a value type to it's implemented functions
+     */
     match val_type {
-        /*
-         * Methods for numbers
-         */
         Ops::Number => {
-            /*
-             * function: sum()
-             *
-             * Returns the variable value plus the argument
-             */
             res.insert(
                 "sum".to_string(),
                 FunctionDef {
                     name: String::from("sum"),
                     body: vec![],
-                    cb: |_, args, _, stack, _| {
-                        let var_name = value_to_string(args[0].clone(), stack).unwrap();
-                        let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
-
-                        // Get the variable from the stack
-                        let variable = stack
-                            .lock()
-                            .unwrap()
-                            .get_variable_by_name(var_name.as_str());
-
-                        match variable {
-                            Some(current_var) => {
-                                let current_var =
-                                    downcast_val::<Number>(current_var.value.as_self());
-                                let current_val = current_var.get_state();
-
-                                let new_val = Number::new(current_val + new_val);
-
-                                Some(BoxedValue {
-                                    interface: Ops::Number,
-                                    value: Box::new(new_val),
-                                })
-                            }
-                            _ => None,
-                        }
-                    },
+                    cb: Number::sum,
                     expr_id: "".to_string(),
                     arguments: vec![],
                 },
             );
-            /*
-             * function: mut_sum()
-             *
-             * Assigns to the variable value it's value plus the argument
-             */
+
             res.insert(
                 "mut_sum".to_string(),
                 FunctionDef {
                     name: String::from("mut_sum"),
                     body: vec![],
-                    cb: |_, args, _, stack, _| {
-                        let var_name = value_to_string(args[0].clone(), stack).unwrap();
-                        let new_val = downcast_val::<Number>(args[1].value.as_self()).0;
-
-                        // Get the variable from the stack
-                        let var_ref = stack
-                            .lock()
-                            .unwrap()
-                            .get_variable_by_name(var_name.as_str());
-
-                        if let Some(current_var) = var_ref {
-                            let current_val = downcast_val::<Number>(current_var.value.as_self());
-                            let current_num = current_val.get_state();
-
-                            let new_val = Number::new(current_num + new_val);
-
-                            stack.lock().unwrap().modify_var(
-                                var_name,
-                                BoxedValue {
-                                    interface: Ops::Number,
-                                    value: Box::new(new_val),
-                                },
-                            );
-                        }
-
-                        None
-                    },
+                    cb: Number::mut_sum,
                     expr_id: "".to_string(),
                     arguments: vec![],
                 },
