@@ -1,11 +1,33 @@
-use crate::ast::ast_operations;
-use crate::ast::ast_operations::{AstBase, BoxedValue};
-use crate::runtime::{downcast_val, value_to_string, values_to_strings};
-use crate::utils::primitive_values::StringVal;
-use crate::utils::{errors, primitive_values, Ops};
-use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
-use std::{thread, time};
+use crate::{
+    ast::{
+        self,
+        AstBase,
+        BoxedValue,
+    },
+    primitive_values::{
+        pointer::Pointer,
+        primitive_base::PrimitiveValueBase,
+        string::StringVal,
+    },
+    runtime::{
+        downcast_val,
+        value_to_string,
+        values_to_strings,
+    },
+    utils::{
+        errors,
+        Ops,
+    },
+};
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        MutexGuard,
+    },
+    thread,
+    time,
+};
 
 /*
  * Variable definition stored on the memory stack
@@ -14,7 +36,7 @@ use std::{thread, time};
 pub struct VariableDef {
     pub name: String,
     pub val_type: Ops,
-    pub value: Box<dyn primitive_values::PrimitiveValueBase>,
+    pub value: Box<dyn PrimitiveValueBase>,
     pub expr_id: String,
     pub functions: HashMap<String, FunctionDef>,
     pub var_id: u64,
@@ -41,8 +63,8 @@ type FunctionAction = fn(
     args_vals: Vec<BoxedValue>,
     body: Vec<Box<dyn AstBase>>,
     stack: &Mutex<Stack>,
-    ast: &MutexGuard<ast_operations::Expression>,
-) -> Option<ast_operations::BoxedValue>;
+    ast: &MutexGuard<ast::Expression>,
+) -> Option<ast::BoxedValue>;
 
 /*
  * Function definition stored on the memory stack
@@ -332,7 +354,7 @@ impl Stack {
             if variable.val_type == Ops::Pointer {
                 let variable = variable.clone();
 
-                let pointer = downcast_val::<primitive_values::Pointer>(variable.value.as_self());
+                let pointer = downcast_val::<Pointer>(variable.value.as_self());
 
                 let variable_origin = self.get_mut_variable_by_id(pointer.0);
 

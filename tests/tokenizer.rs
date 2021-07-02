@@ -1,6 +1,11 @@
-use ham_core::get_tokens;
-use ham_core::types::{Token, TokensList};
-use ham_core::utils::Ops;
+use ham_core::{
+    get_tokens,
+    types::{
+        Token,
+        TokensList,
+    },
+    utils::Ops,
+};
 
 /*
  * Make sure a sample code is properly tokenized

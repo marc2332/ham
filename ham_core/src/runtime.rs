@@ -1,13 +1,37 @@
-use crate::ast::ast_operations;
-use crate::ast::ast_operations::BoxedValue;
-use crate::stack::{FunctionDef, FunctionsContainer, Stack};
-use crate::types::BoxedPrimitiveValue;
-use crate::utils::errors::raise_error;
-use crate::utils::primitive_values::{Number, NumberValueBase, StringVal};
-use crate::utils::{errors, primitive_values, Ops};
-use std::any::Any;
-use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
+use crate::{
+    ast::{
+        self,
+        BoxedValue,
+    },
+    primitive_values::{
+        boolean::Boolean,
+        number::{
+            Number,
+            NumberValueBase,
+        },
+        pointer::Pointer,
+        string::StringVal,
+    },
+    stack::{
+        FunctionDef,
+        FunctionsContainer,
+        Stack,
+    },
+    types::BoxedPrimitiveValue,
+    utils::{
+        errors,
+        errors::raise_error,
+        Ops,
+    },
+};
+use std::{
+    any::Any,
+    collections::HashMap,
+    sync::{
+        Mutex,
+        MutexGuard,
+    },
+};
 
 /*
  * Shorthand and *unsafe* way to downcast values
@@ -21,23 +45,11 @@ pub fn downcast_val<T: 'static>(val: &dyn Any) -> &T {
  */
 pub fn value_to_string(value: BoxedValue, stack: &Mutex<Stack>) -> Result<String, Ops> {
     match value.interface {
-        Ops::Boolean => Ok(
-            downcast_val::<primitive_values::Boolean>(value.value.as_self())
-                .0
-                .to_string(),
-        ),
-        Ops::String => Ok(
-            downcast_val::<primitive_values::StringVal>(value.value.as_self())
-                .0
-                .clone(),
-        ),
-        Ops::Number => Ok(
-            downcast_val::<primitive_values::Number>(value.value.as_self())
-                .0
-                .to_string(),
-        ),
+        Ops::Boolean => Ok(downcast_val::<Boolean>(value.value.as_self()).0.to_string()),
+        Ops::String => Ok(downcast_val::<StringVal>(value.value.as_self()).0.clone()),
+        Ops::Number => Ok(downcast_val::<Number>(value.value.as_self()).0.to_string()),
         Ops::Pointer => {
-            let pointer = downcast_val::<primitive_values::Pointer>(value.value.as_self()).0;
+            let pointer = downcast_val::<Pointer>(value.value.as_self()).0;
             let variable = stack.lock().unwrap().get_variable_by_id(pointer).unwrap();
 
             value_to_string(
@@ -179,11 +191,11 @@ pub fn resolve_reference(
     stack: &Mutex<Stack>,
     val_type: Ops,
     ref_val: BoxedPrimitiveValue,
-    ast: &MutexGuard<ast_operations::Expression>,
+    ast: &MutexGuard<ast::Expression>,
 ) -> Option<BoxedValue> {
     match val_type {
         Ops::Pointer => {
-            let pointer = downcast_val::<primitive_values::Pointer>(ref_val.as_self()).0;
+            let pointer = downcast_val::<Pointer>(ref_val.as_self()).0;
             let variable = stack.lock().unwrap().get_variable_by_id(pointer);
 
             if let Some(variable) = variable {
@@ -209,8 +221,7 @@ pub fn resolve_reference(
             value: ref_val,
         }),
         Ops::Reference => {
-            let mut referenced_variable =
-                downcast_val::<ast_operations::Reference>(ref_val.as_self()).clone();
+            let mut referenced_variable = downcast_val::<ast::Reference>(ref_val.as_self()).clone();
 
             let is_pointer = referenced_variable.0.starts_with('&');
 
@@ -229,7 +240,7 @@ pub fn resolve_reference(
                     // Return a pointer
                     Some(BoxedValue {
                         interface: Ops::Pointer,
-                        value: Box::new(primitive_values::Pointer(variable.var_id)),
+                        value: Box::new(Pointer(variable.var_id)),
                     })
                 } else {
                     // Return a copy of it's value
@@ -244,7 +255,7 @@ pub fn resolve_reference(
             }
         }
         Ops::FnCall => {
-            let fn_call = downcast_val::<ast_operations::FnCall>(ref_val.as_self());
+            let fn_call = downcast_val::<ast::FnCall>(ref_val.as_self());
 
             let is_referenced = fn_call.reference_to.is_some();
 

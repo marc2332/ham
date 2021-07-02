@@ -1,5 +1,7 @@
-use crate::utils::primitive_values::PrimitiveValueBase;
-use crate::utils::Ops;
+use crate::{
+    primitive_values::primitive_base::PrimitiveValueBase,
+    utils::Ops,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {

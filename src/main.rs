@@ -1,12 +1,22 @@
-use clap::{App, Arg, ArgMatches};
-use ham_core::ast;
-use ham_core::ast::ast_operations::ExpressionBase;
-use ham_core::stack::Stack;
+use clap::{
+    App,
+    Arg,
+    ArgMatches,
+};
+use ham_core::{
+    ast::{
+        Expression,
+        ExpressionBase,
+    },
+    stack::Stack,
+};
 use ham_manager::Manifest;
 use question::Question;
-use std::fs;
-use std::path::Path;
-use std::sync::Mutex;
+use std::{
+    fs,
+    path::Path,
+    sync::Mutex,
+};
 
 fn commands() -> ArgMatches {
     App::new("ham")
@@ -37,7 +47,7 @@ fn run_repl() {
     let cwd = std::env::current_dir().unwrap().display().to_string();
 
     // Global context
-    let global_context = ast::ast_operations::Expression::new();
+    let global_context = Expression::new();
 
     // Memory stack
     let stack = Mutex::new(Stack::new(global_context.expr_id));
@@ -51,7 +61,7 @@ fn run_repl() {
                 let tokens = ham_core::get_tokens(line);
 
                 // Ast tree root
-                let tree = Mutex::new(ast::ast_operations::Expression::new());
+                let tree = Mutex::new(Expression::new());
 
                 // Tree
                 ham_core::move_tokens_into_ast(tokens, &tree, cwd.clone());
@@ -98,7 +108,7 @@ fn main() {
             let tokens = ham_core::get_tokens(filecontent);
 
             // Global context
-            let global_context = ast::ast_operations::Expression::new();
+            let global_context = Expression::new();
 
             // Memory stack
             let stack = Mutex::new(Stack::new(global_context.expr_id.clone()));
