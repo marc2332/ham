@@ -1,19 +1,44 @@
 use crate::{
-    ast::{
+    ast_types::{
+        boxed_val::BoxedValue,
+        break_ast::{
+            Break,
+            BreakBase,
+        },
         convert_tokens_into_arguments,
         convert_tokens_into_res_expressions,
+        expression::{
+            Expression,
+            ExpressionBase,
+        },
+        fn_call::{
+            FnCall,
+            FnCallBase,
+        },
+        fn_def::{
+            FnDefinition,
+            FnDefinitionBase,
+        },
         get_assignment_token_fn,
         get_tokens_from_to_fn,
-        BoxedValue,
-        BreakBase,
-        ExpressionBase,
-        FnCallBase,
-        FnDefinition,
-        FnDefinitionBase,
-        IfConditionalBase,
-        VarAssignmentBase,
-        VarDefinitionBase,
-        WhileBase,
+        if_ast::{
+            IfConditional,
+            IfConditionalBase,
+        },
+        module::Module,
+        return_ast::ReturnStatement,
+        var_assign::{
+            VarAssignment,
+            VarAssignmentBase,
+        },
+        var_def::{
+            VarDefinition,
+            VarDefinitionBase,
+        },
+        while_block::{
+            While,
+            WhileBase,
+        },
     },
     runtime::{
         downcast_val,
@@ -49,7 +74,7 @@ use std::{
 };
 use uuid::Uuid;
 
-pub mod ast;
+pub mod ast_types;
 pub mod primitive_values;
 pub mod runtime;
 pub mod stack;
@@ -158,11 +183,7 @@ pub fn get_tokens(code: String) -> TokensList {
     self::transform_into_tokens(lines)
 }
 
-pub fn move_tokens_into_ast(
-    tokens: TokensList,
-    ast_tree: &Mutex<ast::Expression>,
-    filedir: String,
-) {
+pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, filedir: String) {
     let mut ast_tree = ast_tree.lock().unwrap();
 
     // Closure version of above
@@ -198,7 +219,7 @@ pub fn move_tokens_into_ast(
         found_tokens
     };
 
-    let get_assignment_token = |val: String, token_n: usize| -> (usize, ast::BoxedValue) {
+    let get_assignment_token = |val: String, token_n: usize| -> (usize, BoxedValue) {
         get_assignment_token_fn(val, token_n, tokens.clone(), Directions::LeftToRight)
     };
 
@@ -208,7 +229,7 @@ pub fn move_tokens_into_ast(
         let current_token = &tokens[token_n];
         match current_token.ast_type {
             Ops::Break => {
-                let break_ast = ast::Break::new();
+                let break_ast = Break::new();
                 ast_tree.body.push(Box::new(break_ast));
                 token_n += 1;
             }
@@ -242,7 +263,7 @@ pub fn move_tokens_into_ast(
                     let tokens = get_tokens(filecontent);
 
                     // Move all the tokens into a expression
-                    let scope_tree = Mutex::new(ast::Expression::new());
+                    let scope_tree = Mutex::new(Expression::new());
                     move_tokens_into_ast(tokens.clone(), &scope_tree, filedir.clone());
 
                     // Copy all root-functions (public by default) from the expression body to the vector
@@ -251,11 +272,11 @@ pub fn move_tokens_into_ast(
                     for op in scope_tree.lock().unwrap().body.iter() {
                         if op.get_type() == Ops::FnDef {
                             public_functions
-                                .push(downcast_val::<ast::FnDefinition>(op.as_self()).clone());
+                                .push(downcast_val::<FnDefinition>(op.as_self()).clone());
                         }
                     }
 
-                    let module = ast::Module {
+                    let module = Module {
                         name: module_name.to_string(),
                         functions: public_functions,
                     };
@@ -283,7 +304,7 @@ pub fn move_tokens_into_ast(
                 );
 
                 // Scope tree
-                let scope_tree = Mutex::new(ast::Expression::new());
+                let scope_tree = Mutex::new(Expression::new());
 
                 // Ignore the if conditions and {
                 let open_block_index = token_n + condition_tokens.len() + 1;
@@ -300,7 +321,7 @@ pub fn move_tokens_into_ast(
 
                 // Create a while definition
                 let body = &scope_tree.lock().unwrap().body.clone();
-                let ast_token = ast::While::new(exprs.clone(), body.to_vec());
+                let ast_token = While::new(exprs.clone(), body.to_vec());
                 ast_tree.body.push(Box::new(ast_token));
             }
 
@@ -311,7 +332,7 @@ pub fn move_tokens_into_ast(
                 let (size, return_val) =
                     get_assignment_token(next_token.value.clone(), token_n + 1);
 
-                let ast_token = ast::ReturnStatement { value: return_val };
+                let ast_token = ReturnStatement { value: return_val };
                 ast_tree.body.push(Box::new(ast_token));
 
                 token_n += 2 + size;
@@ -332,7 +353,7 @@ pub fn move_tokens_into_ast(
                 );
 
                 // Scope tree
-                let scope_tree = Mutex::new(ast::Expression::new());
+                let scope_tree = Mutex::new(Expression::new());
 
                 // Ignore the if conditions and {
                 let open_block_index = token_n + condition_tokens.len() + 1;
@@ -349,7 +370,7 @@ pub fn move_tokens_into_ast(
 
                 // Create a if block definition
                 let body = &scope_tree.lock().unwrap().body.clone();
-                let ast_token = ast::IfConditional::new(exprs.clone(), body.to_vec());
+                let ast_token = IfConditional::new(exprs.clone(), body.to_vec());
                 ast_tree.body.push(Box::new(ast_token));
             }
 
@@ -370,10 +391,8 @@ pub fn move_tokens_into_ast(
                          * Call to functions from variables
                          */
                         Ops::FnCall => {
-                            let mut ast_token = ast::FnCall::new(
-                                next_token.value.clone(),
-                                Some(previous_token.value),
-                            );
+                            let mut ast_token =
+                                FnCall::new(next_token.value.clone(), Some(previous_token.value));
 
                             // Ignore itself and the (
                             let starting_token = token_n + 2;
@@ -404,7 +423,7 @@ pub fn move_tokens_into_ast(
                 let def_name = String::from(&tokens[token_n + 1].value.clone());
 
                 // Scope tree
-                let scope_tree = Mutex::new(ast::Expression::new());
+                let scope_tree = Mutex::new(Expression::new());
 
                 // Ignore function name and the (
                 let starting_token = token_n + 2;
@@ -432,7 +451,7 @@ pub fn move_tokens_into_ast(
 
                 // Create a function definition
                 let body = &scope_tree.lock().unwrap().body.clone();
-                let ast_token = ast::FnDefinition::new(def_name, body.to_vec(), arguments);
+                let ast_token = FnDefinition::new(def_name, body.to_vec(), arguments);
                 ast_tree.body.push(Box::new(ast_token));
             }
             // Variable definition
@@ -450,7 +469,7 @@ pub fn move_tokens_into_ast(
 
                 let (size, assignment) = get_assignment_token(def_value, val_index);
 
-                let ast_token = ast::VarDefinition::new(def_name, assignment);
+                let ast_token = VarDefinition::new(def_name, assignment);
                 ast_tree.body.push(Box::new(ast_token));
 
                 token_n += 3 + size;
@@ -472,15 +491,14 @@ pub fn move_tokens_into_ast(
                         let (size, assignment) =
                             get_assignment_token(token_after_equal.value.clone(), token_n + 2);
 
-                        let ast_token =
-                            ast::VarAssignment::new(current_token.value.clone(), assignment);
+                        let ast_token = VarAssignment::new(current_token.value.clone(), assignment);
 
                         ast_tree.body.push(Box::new(ast_token));
 
                         token_n += 2 + size;
                     }
                     Ops::FnCall => {
-                        let mut ast_token = ast::FnCall::new(current_token.value.clone(), None);
+                        let mut ast_token = FnCall::new(current_token.value.clone(), None);
 
                         // Ignore itself and the (
                         let starting_token = token_n + 1;
@@ -516,7 +534,7 @@ fn get_function_from_def(function: &FnDefinition) -> FunctionDef {
         body: function.body.clone(),
         arguments: function.arguments.clone(),
         cb: |args, args_vals, body, stack, ast| {
-            let expr = ast::Expression::from_body(body.clone());
+            let expr = Expression::from_body(body.clone());
             let expr_id = expr.expr_id.clone();
 
             for (i, arg) in args_vals.iter().enumerate() {
@@ -547,7 +565,7 @@ fn get_function_from_def(function: &FnDefinition) -> FunctionDef {
     }
 }
 
-pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast::BoxedValue> {
+pub fn run_ast(ast: &Mutex<Expression>, stack: &Mutex<Stack>) -> Option<BoxedValue> {
     let ast = ast.lock().unwrap();
 
     // Closure version of resolve_reference
@@ -557,7 +575,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
 
     // Check if a conditional is true or not
     let eval_condition =
-        |condition_code: Ops, left_val: ast::BoxedValue, right_val: ast::BoxedValue| -> bool {
+        |condition_code: Ops, left_val: BoxedValue, right_val: BoxedValue| -> bool {
             let left_val = resolve_ref(left_val.interface, left_val.value.clone());
             let right_val = resolve_ref(right_val.interface, right_val.value.clone());
 
@@ -600,7 +618,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle module definitions
              */
             Ops::Module => {
-                let module = downcast_val::<ast::Module>(operation.as_self());
+                let module = downcast_val::<Module>(operation.as_self());
 
                 let var_id = stack.lock().unwrap().reseve_index();
 
@@ -627,9 +645,9 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle if block
              */
             Ops::WhileDef => {
-                let while_block = downcast_val::<ast::While>(operation.as_self());
+                let while_block = downcast_val::<While>(operation.as_self());
 
-                let check_while = |while_block: &ast::While| -> Option<BoxedValue> {
+                let check_while = |while_block: &While| -> Option<BoxedValue> {
                     /*
                      * Evaluate all conditions,
                      * If all they return true then execute the IF's expression block
@@ -646,7 +664,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
                     }
 
                     if true_count == while_block.conditions.len() {
-                        let expr = ast::Expression::from_body(while_block.body.clone());
+                        let expr = Expression::from_body(while_block.body.clone());
                         let expr_id = expr.expr_id.clone();
 
                         // Execute the expression block
@@ -699,7 +717,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle return statements
              */
             Ops::Return => {
-                let statement = downcast_val::<ast::ReturnStatement>(operation.as_self());
+                let statement = downcast_val::<ReturnStatement>(operation.as_self());
 
                 // Type of return
                 let return_type = statement.value.interface;
@@ -717,7 +735,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle if statements
              */
             Ops::IfConditional => {
-                let if_statement = downcast_val::<ast::IfConditional>(operation.as_self());
+                let if_statement = downcast_val::<IfConditional>(operation.as_self());
 
                 /*
                  * Evaluate all conditions,
@@ -733,7 +751,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
                     }
                 }
                 if true_count == if_statement.conditions.len() {
-                    let expr = ast::Expression::from_body(if_statement.body.clone());
+                    let expr = Expression::from_body(if_statement.body.clone());
                     let expr_id = expr.expr_id.clone();
 
                     // Execute the expression block
@@ -752,7 +770,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle function definitions
              */
             Ops::FnDef => {
-                let function = downcast_val::<ast::FnDefinition>(operation.as_self());
+                let function = downcast_val::<FnDefinition>(operation.as_self());
 
                 stack
                     .lock()
@@ -764,7 +782,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle variables definitions
              */
             Ops::VarDef => {
-                let variable = downcast_val::<ast::VarDefinition>(operation.as_self());
+                let variable = downcast_val::<VarDefinition>(operation.as_self());
 
                 let val_type = variable.assignment.interface;
                 let ref_val = variable.assignment.value.clone();
@@ -791,7 +809,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle variable assignments
              */
             Ops::VarAssign => {
-                let variable = downcast_val::<ast::VarAssignment>(operation.as_self());
+                let variable = downcast_val::<VarAssignment>(operation.as_self());
 
                 let is_pointer = variable.var_name.starts_with('&');
 
@@ -818,7 +836,7 @@ pub fn run_ast(ast: &Mutex<ast::Expression>, stack: &Mutex<Stack>) -> Option<ast
              * Handle function calls
              */
             Ops::FnCall => {
-                let fn_call = downcast_val::<ast::FnCall>(operation.as_self());
+                let fn_call = downcast_val::<FnCall>(operation.as_self());
 
                 let is_referenced = fn_call.reference_to.is_some();
 

@@ -4,7 +4,7 @@ use clap::{
     ArgMatches,
 };
 use ham_core::{
-    ast::{
+    ast_types::expression::{
         Expression,
         ExpressionBase,
     },

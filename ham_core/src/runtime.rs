@@ -1,7 +1,9 @@
 use crate::{
-    ast::{
-        self,
-        BoxedValue,
+    ast_types::{
+        boxed_val::BoxedValue,
+        expression::Expression,
+        fn_call::FnCall,
+        reference::Reference,
     },
     primitive_values::{
         boolean::Boolean,
@@ -191,7 +193,7 @@ pub fn resolve_reference(
     stack: &Mutex<Stack>,
     val_type: Ops,
     ref_val: BoxedPrimitiveValue,
-    ast: &MutexGuard<ast::Expression>,
+    ast: &MutexGuard<Expression>,
 ) -> Option<BoxedValue> {
     match val_type {
         Ops::Pointer => {
@@ -221,7 +223,7 @@ pub fn resolve_reference(
             value: ref_val,
         }),
         Ops::Reference => {
-            let mut referenced_variable = downcast_val::<ast::Reference>(ref_val.as_self()).clone();
+            let mut referenced_variable = downcast_val::<Reference>(ref_val.as_self()).clone();
 
             let is_pointer = referenced_variable.0.starts_with('&');
 
@@ -255,7 +257,7 @@ pub fn resolve_reference(
             }
         }
         Ops::FnCall => {
-            let fn_call = downcast_val::<ast::FnCall>(ref_val.as_self());
+            let fn_call = downcast_val::<FnCall>(ref_val.as_self());
 
             let is_referenced = fn_call.reference_to.is_some();
 

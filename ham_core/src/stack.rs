@@ -1,8 +1,8 @@
 use crate::{
-    ast::{
-        self,
-        AstBase,
-        BoxedValue,
+    ast_types::{
+        ast_base::AstBase,
+        boxed_val::BoxedValue,
+        expression::Expression,
     },
     primitive_values::{
         pointer::Pointer,
@@ -63,8 +63,8 @@ type FunctionAction = fn(
     args_vals: Vec<BoxedValue>,
     body: Vec<Box<dyn AstBase>>,
     stack: &Mutex<Stack>,
-    ast: &MutexGuard<ast::Expression>,
-) -> Option<ast::BoxedValue>;
+    ast: &MutexGuard<Expression>,
+) -> Option<BoxedValue>;
 
 /*
  * Function definition stored on the memory stack
