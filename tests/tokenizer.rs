@@ -1,6 +1,6 @@
 use ham_core::get_tokens;
 use ham_core::types::{Token, TokensList};
-use ham_core::utils::op_codes;
+use ham_core::utils::Ops;
 
 /*
  * Make sure a sample code is properly tokenized
@@ -15,39 +15,32 @@ pub fn tokenizer_works() {
 
     // Expected tokens
     let tokens: TokensList = vec![
-        Token::new(op_codes::FN_DEF, "fn".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "x".to_string(), 1),
-        Token::new(op_codes::OPEN_PARENT, "(".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "b".to_string(), 1),
-        Token::new(op_codes::CLOSE_PARENT, ")".to_string(), 1),
-        Token::new(op_codes::OPEN_BLOCK, "{".to_string(), 1),
-        Token::new(op_codes::VAR_DEF, "let".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "c".to_string(), 1),
-        Token::new(op_codes::LEFT_ASSIGN, "=".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "b".to_string(), 1),
-        Token::new(op_codes::RETURN, "return".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "c".to_string(), 1),
-        Token::new(op_codes::CLOSE_BLOCK, "}".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "x".to_string(), 1),
-        Token::new(op_codes::OPEN_PARENT, "(".to_string(), 1),
-        Token::new(op_codes::REFERENCE, "4".to_string(), 1),
-        Token::new(op_codes::CLOSE_PARENT, ")".to_string(), 1),
+        Token::new(Ops::FnDef, "fn".to_string(), 1),
+        Token::new(Ops::Reference, "x".to_string(), 1),
+        Token::new(Ops::OpenParent, "(".to_string(), 1),
+        Token::new(Ops::Reference, "b".to_string(), 1),
+        Token::new(Ops::CloseParent, ")".to_string(), 1),
+        Token::new(Ops::OpenBlock, "{".to_string(), 1),
+        Token::new(Ops::VarDef, "let".to_string(), 1),
+        Token::new(Ops::Reference, "c".to_string(), 1),
+        Token::new(Ops::LeftAssign, "=".to_string(), 1),
+        Token::new(Ops::Reference, "b".to_string(), 1),
+        Token::new(Ops::Return, "return".to_string(), 1),
+        Token::new(Ops::Reference, "c".to_string(), 1),
+        Token::new(Ops::CloseBlock, "}".to_string(), 1),
+        Token::new(Ops::Reference, "x".to_string(), 1),
+        Token::new(Ops::OpenParent, "(".to_string(), 1),
+        Token::new(Ops::Reference, "4".to_string(), 1),
+        Token::new(Ops::CloseParent, ")".to_string(), 1),
     ];
 
-    let mut is_ok = true;
+    let mut all_tokens_are_ok = true;
 
-    // Terribly ugly
     for (i, token) in created_tokens.iter().enumerate() {
-        if token.line != tokens[i].line {
-            is_ok = false;
-        }
-        if token.ast_type != tokens[i].ast_type {
-            is_ok = false;
-        }
-        if token.value != tokens[i].value {
-            is_ok = false;
+        if *token != tokens[i] {
+            all_tokens_are_ok = false;
         }
     }
 
-    assert_eq!(true, is_ok);
+    assert_eq!(true, all_tokens_are_ok);
 }

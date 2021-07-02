@@ -9,9 +9,8 @@ use crate::runtime::{
 };
 use crate::stack::{FunctionDef, FunctionsContainer, Stack, VariableDef};
 use crate::types::{BoxedPrimitiveValue, IndexedTokenList, LinesList, Token, TokensList};
-use crate::utils::op_codes::Directions;
 use crate::utils::primitive_values::StringVal;
-use crate::utils::{errors, op_codes, primitive_values};
+use crate::utils::{errors, primitive_values, Directions, Ops};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -82,25 +81,25 @@ fn transform_into_tokens(lines: LinesList) -> TokensList {
 
     for (i, line) in lines.iter().enumerate() {
         for word in line {
-            let token_type: op_codes::Val = match word.as_str() {
-                "let" => op_codes::VAR_DEF,
-                "=" => op_codes::LEFT_ASSIGN,
-                "(" => op_codes::OPEN_PARENT,
-                ")" => op_codes::CLOSE_PARENT,
-                "fn" => op_codes::FN_DEF,
-                "{" => op_codes::OPEN_BLOCK,
-                "}" => op_codes::CLOSE_BLOCK,
-                "if" => op_codes::IF_CONDITIONAL,
-                "==" => op_codes::EQUAL_CONDITION,
-                "return" => op_codes::RETURN,
-                "." => op_codes::PROP_ACCESS,
-                "," => op_codes::COMMA_DELIMITER,
-                "while" => op_codes::WHILE_DEF,
-                "!=" => op_codes::NOT_EQUAL_CONDITION,
-                "import" => op_codes::IMPORT,
-                "from" => op_codes::FROM_MODULE,
-                "break" => op_codes::BREAK,
-                _ => op_codes::REFERENCE,
+            let token_type: Ops = match word.as_str() {
+                "let" => Ops::VarDef,
+                "=" => Ops::LeftAssign,
+                "(" => Ops::OpenParent,
+                ")" => Ops::CloseParent,
+                "fn" => Ops::FnDef,
+                "{" => Ops::OpenBlock,
+                "}" => Ops::CloseBlock,
+                "if" => Ops::IfConditional,
+                "==" => Ops::EqualCondition,
+                "return" => Ops::Return,
+                "." => Ops::PropAccess,
+                "," => Ops::CommaDelimiter,
+                "while" => Ops::WhileDef,
+                "!=" => Ops::NotEqualCondition,
+                "import" => Ops::Import,
+                "from" => Ops::FromModule,
+                "break" => Ops::Break,
+                _ => Ops::Reference,
             };
 
             let ast_token = Token {
@@ -132,38 +131,37 @@ pub fn move_tokens_into_ast(
     let mut ast_tree = ast_tree.lock().unwrap();
 
     // Closure version of above
-    let get_tokens_from_to = |from: usize, to: op_codes::Val| -> IndexedTokenList {
+    let get_tokens_from_to = |from: usize, to: Ops| -> IndexedTokenList {
         get_tokens_from_to_fn(from, to, tokens.clone(), Directions::LeftToRight)
     };
 
     // Get all the tokens in a group (expression blocks, arguments)
-    let get_tokens_in_group_of =
-        |from: usize, open_tok: op_codes::Val, close_tok: op_codes::Val| -> TokensList {
-            let mut found_tokens = Vec::new();
+    let get_tokens_in_group_of = |from: usize, open_tok: Ops, close_tok: Ops| -> TokensList {
+        let mut found_tokens = Vec::new();
 
-            let mut count = 0;
+        let mut count = 0;
 
-            let mut token_n = from;
+        let mut token_n = from;
 
-            while token_n < tokens.len() {
-                let token = tokens[token_n].clone();
+        while token_n < tokens.len() {
+            let token = tokens[token_n].clone();
 
-                if token.ast_type == open_tok {
-                    count += 1;
-                } else if token.ast_type == close_tok {
-                    count -= 1;
-                }
-
-                if count == 0 {
-                    break;
-                } else if token_n > from {
-                    found_tokens.push(token.clone());
-                }
-                token_n += 1;
+            if token.ast_type == open_tok {
+                count += 1;
+            } else if token.ast_type == close_tok {
+                count -= 1;
             }
 
-            found_tokens
-        };
+            if count == 0 {
+                break;
+            } else if token_n > from {
+                found_tokens.push(token.clone());
+            }
+            token_n += 1;
+        }
+
+        found_tokens
+    };
 
     let get_assignment_token =
         |val: String, token_n: usize| -> (usize, ast_operations::BoxedValue) {
@@ -175,14 +173,14 @@ pub fn move_tokens_into_ast(
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
         match current_token.ast_type {
-            op_codes::BREAK => {
+            Ops::Break => {
                 let break_ast = ast_operations::Break::new();
                 ast_tree.body.push(Box::new(break_ast));
                 token_n += 1;
             }
 
             // Import statement
-            op_codes::IMPORT => {
+            Ops::Import => {
                 let module_name = &tokens[token_n + 1].value;
                 let module_direction = &tokens[token_n + 2];
                 let module_origin = &tokens[token_n + 3].value;
@@ -194,7 +192,7 @@ pub fn move_tokens_into_ast(
                  * module_origin= "./x.ham"
                  */
 
-                if module_direction.ast_type != op_codes::FROM_MODULE {
+                if module_direction.ast_type != Ops::FromModule {
                     errors::raise_error(
                         errors::CODES::UnexpectedKeyword,
                         vec![module_direction.value.clone()],
@@ -217,7 +215,7 @@ pub fn move_tokens_into_ast(
                     let mut public_functions = Vec::new();
 
                     for op in scope_tree.lock().unwrap().body.iter() {
-                        if op.get_type() == op_codes::FN_DEF {
+                        if op.get_type() == Ops::FnDef {
                             public_functions.push(
                                 downcast_val::<ast_operations::FnDefinition>(op.as_self()).clone(),
                             );
@@ -238,9 +236,9 @@ pub fn move_tokens_into_ast(
             }
 
             // While block
-            op_codes::WHILE_DEF => {
+            Ops::WhileDef => {
                 // Get the if condition tokens
-                let condition_tokens = get_tokens_from_to(token_n + 1, op_codes::OPEN_BLOCK);
+                let condition_tokens = get_tokens_from_to(token_n + 1, Ops::OpenBlock);
 
                 // Transform those tokens into result expressions
                 let exprs = convert_tokens_into_res_expressions(
@@ -258,11 +256,8 @@ pub fn move_tokens_into_ast(
                 let open_block_index = token_n + condition_tokens.len() + 1;
 
                 // Get all tokens inside the if block
-                let block_tokens = get_tokens_in_group_of(
-                    open_block_index,
-                    op_codes::OPEN_BLOCK,
-                    op_codes::CLOSE_BLOCK,
-                );
+                let block_tokens =
+                    get_tokens_in_group_of(open_block_index, Ops::OpenBlock, Ops::CloseBlock);
 
                 // Move the tokens into the tree
                 move_tokens_into_ast(block_tokens.clone(), &scope_tree, filedir.clone());
@@ -277,7 +272,7 @@ pub fn move_tokens_into_ast(
             }
 
             // Return statement
-            op_codes::RETURN => {
+            Ops::Return => {
                 let next_token = tokens[token_n + 1].clone();
 
                 let (size, return_val) =
@@ -290,9 +285,9 @@ pub fn move_tokens_into_ast(
             }
 
             // If statement
-            op_codes::IF_CONDITIONAL => {
+            Ops::IfConditional => {
                 // Get the if condition tokens
-                let condition_tokens = get_tokens_from_to(token_n + 1, op_codes::OPEN_BLOCK);
+                let condition_tokens = get_tokens_from_to(token_n + 1, Ops::OpenBlock);
 
                 // Transform those tokens into result expressions
                 let exprs = convert_tokens_into_res_expressions(
@@ -310,11 +305,8 @@ pub fn move_tokens_into_ast(
                 let open_block_index = token_n + condition_tokens.len() + 1;
 
                 // Get all tokens inside the if block
-                let block_tokens = get_tokens_in_group_of(
-                    open_block_index,
-                    op_codes::OPEN_BLOCK,
-                    op_codes::CLOSE_BLOCK,
-                );
+                let block_tokens =
+                    get_tokens_in_group_of(open_block_index, Ops::OpenBlock, Ops::CloseBlock);
 
                 // Move the tokens into the tree
                 move_tokens_into_ast(block_tokens.clone(), &scope_tree, filedir.clone());
@@ -328,23 +320,23 @@ pub fn move_tokens_into_ast(
                 ast_tree.body.push(Box::new(ast_token));
             }
 
-            op_codes::PROP_ACCESS => {
+            Ops::PropAccess => {
                 let previous_token = tokens[token_n - 1].clone();
                 let next_token = tokens[token_n + 1].clone();
 
-                if next_token.ast_type == op_codes::REFERENCE {
+                if next_token.ast_type == Ops::Reference {
                     let after_next_token = tokens[token_n + 2].clone();
 
                     let reference_type = match after_next_token.ast_type {
-                        op_codes::OPEN_PARENT => op_codes::FN_CALL,
-                        _ => 0,
+                        Ops::OpenParent => Ops::FnCall,
+                        _ => Ops::Invalid,
                     };
 
                     match reference_type {
                         /*
                          * Call to functions from variables
                          */
-                        op_codes::FN_CALL => {
+                        Ops::FnCall => {
                             let mut ast_token = ast_operations::FnCall::new(
                                 next_token.value.clone(),
                                 Some(previous_token.value),
@@ -355,8 +347,8 @@ pub fn move_tokens_into_ast(
 
                             let arguments_tokens = get_tokens_in_group_of(
                                 starting_token,
-                                op_codes::OPEN_PARENT,
-                                op_codes::CLOSE_PARENT,
+                                Ops::OpenParent,
+                                Ops::CloseParent,
                             );
                             let arguments = convert_tokens_into_arguments(arguments_tokens.clone());
 
@@ -368,14 +360,14 @@ pub fn move_tokens_into_ast(
                         /*
                          * TODO: Access properties from varibles
                          */
-                        op_codes::REFERENCE => {}
+                        Ops::Reference => {}
                         _ => (),
                     };
                 }
             }
 
             // Function definition
-            op_codes::FN_DEF => {
+            Ops::FnDef => {
                 let def_name = String::from(&tokens[token_n + 1].value.clone());
 
                 // Scope tree
@@ -385,25 +377,19 @@ pub fn move_tokens_into_ast(
                 let starting_token = token_n + 2;
 
                 // Get function arguments, WIP
-                let arguments: Vec<String> = get_tokens_in_group_of(
-                    starting_token,
-                    op_codes::OPEN_PARENT,
-                    op_codes::CLOSE_PARENT,
-                )
-                .iter()
-                .map(|token| token.value.clone())
-                .collect();
+                let arguments: Vec<String> =
+                    get_tokens_in_group_of(starting_token, Ops::OpenParent, Ops::CloseParent)
+                        .iter()
+                        .map(|token| token.value.clone())
+                        .collect();
 
                 // Ignore function name, (, arguments and )
                 let open_block_index = starting_token + arguments.len() + 2;
 
                 // Get all tokens inside the function block
 
-                let block_tokens = get_tokens_in_group_of(
-                    open_block_index,
-                    op_codes::OPEN_BLOCK,
-                    op_codes::CLOSE_BLOCK,
-                );
+                let block_tokens =
+                    get_tokens_in_group_of(open_block_index, Ops::OpenBlock, Ops::CloseBlock);
 
                 // Move the tokens into the tree
                 move_tokens_into_ast(block_tokens.clone(), &scope_tree, filedir.clone());
@@ -418,7 +404,7 @@ pub fn move_tokens_into_ast(
                 ast_tree.body.push(Box::new(ast_token));
             }
             // Variable definition
-            op_codes::VAR_DEF => {
+            Ops::VarDef => {
                 let next_token = tokens[token_n + 1].clone();
 
                 // Variable name
@@ -438,17 +424,17 @@ pub fn move_tokens_into_ast(
                 token_n += 3 + size;
             }
             // References (fn calls, variable reassignation...)
-            op_codes::REFERENCE => {
+            Ops::Reference => {
                 let next_token = &tokens[token_n + 1];
 
                 let reference_type = match next_token.ast_type {
-                    op_codes::OPEN_PARENT => op_codes::FN_CALL,
-                    op_codes::LEFT_ASSIGN => op_codes::VAR_ASSIGN,
-                    _ => 0,
+                    Ops::OpenParent => Ops::FnCall,
+                    Ops::LeftAssign => Ops::VarAssign,
+                    _ => Ops::Invalid,
                 };
 
                 match reference_type {
-                    op_codes::VAR_ASSIGN => {
+                    Ops::VarAssign => {
                         let token_after_equal = tokens[token_n + 2].clone();
 
                         let (size, assignment) =
@@ -463,7 +449,7 @@ pub fn move_tokens_into_ast(
 
                         token_n += 2 + size;
                     }
-                    op_codes::FN_CALL => {
+                    Ops::FnCall => {
                         let mut ast_token =
                             ast_operations::FnCall::new(current_token.value.clone(), None);
 
@@ -472,8 +458,8 @@ pub fn move_tokens_into_ast(
 
                         let arguments_tokens = get_tokens_in_group_of(
                             starting_token,
-                            op_codes::OPEN_PARENT,
-                            op_codes::CLOSE_PARENT,
+                            Ops::OpenParent,
+                            Ops::CloseParent,
                         );
                         let arguments = convert_tokens_into_arguments(arguments_tokens.clone());
 
@@ -539,13 +525,12 @@ pub fn run_ast(
     let ast = ast.lock().unwrap();
 
     // Closure version of resolve_reference
-    let resolve_ref =
-        |val_type: op_codes::Val, ref_val: BoxedPrimitiveValue| -> Option<BoxedValue> {
-            resolve_reference(stack, val_type, ref_val, &ast)
-        };
+    let resolve_ref = |val_type: Ops, ref_val: BoxedPrimitiveValue| -> Option<BoxedValue> {
+        resolve_reference(stack, val_type, ref_val, &ast)
+    };
 
     // Check if a conditional is true or not
-    let eval_condition = |condition_code: op_codes::Val,
+    let eval_condition = |condition_code: Ops,
                           left_val: ast_operations::BoxedValue,
                           right_val: ast_operations::BoxedValue|
      -> bool {
@@ -555,14 +540,14 @@ pub fn run_ast(
         if let (Some(left_val), Some(right_val)) = (left_val, right_val) {
             match condition_code {
                 // Handle !=
-                op_codes::NOT_EQUAL_CONDITION => {
+                Ops::NotEqualCondition => {
                     let left_val = value_to_string(left_val, stack).unwrap();
                     let right_val = value_to_string(right_val, stack).unwrap();
 
                     left_val != right_val
                 }
                 // Handle ==
-                op_codes::EQUAL_CONDITION => {
+                Ops::EqualCondition => {
                     let left_val = value_to_string(left_val, stack).unwrap();
                     let right_val = value_to_string(right_val, stack).unwrap();
 
@@ -580,9 +565,9 @@ pub fn run_ast(
             /*
              * Handle breaks
              */
-            op_codes::BREAK => {
+            Ops::Break => {
                 return Some(BoxedValue {
-                    interface: op_codes::BREAK,
+                    interface: Ops::Break,
                     value: Box::new(primitive_values::StringVal("break".to_string())),
                 })
             }
@@ -590,7 +575,7 @@ pub fn run_ast(
             /*
              * Handle module definitions
              */
-            op_codes::MODULE => {
+            Ops::Module => {
                 let module = downcast_val::<ast_operations::Module>(operation.as_self());
 
                 let var_id = stack.lock().unwrap().reseve_index();
@@ -606,7 +591,7 @@ pub fn run_ast(
                 // Push the variable into the stack
                 stack.lock().unwrap().push_variable(VariableDef {
                     name: module.name.clone(),
-                    val_type: op_codes::STRING,
+                    val_type: Ops::String,
                     value: Box::new(primitive_values::StringVal(module.name.clone())),
                     expr_id: ast.expr_id.clone(),
                     functions,
@@ -617,7 +602,7 @@ pub fn run_ast(
             /*
              * Handle if block
              */
-            op_codes::WHILE_DEF => {
+            Ops::WhileDef => {
                 let while_block = downcast_val::<ast_operations::While>(operation.as_self());
 
                 let check_while = |while_block: &ast_operations::While| -> Option<BoxedValue> {
@@ -654,7 +639,7 @@ pub fn run_ast(
                         stack.lock().unwrap().drop_ops_from_id(expr_id);
                         Some(BoxedValue {
                             value: Box::new(StringVal("while".to_string())),
-                            interface: op_codes::WHILE_DEF,
+                            interface: Ops::WhileDef,
                         })
                     } else {
                         None
@@ -668,10 +653,10 @@ pub fn run_ast(
 
                     if let Some(res) = res {
                         match res.interface {
-                            op_codes::WHILE_DEF => {
+                            Ops::WhileDef => {
                                 // Ignore non-returning whiles
                             }
-                            op_codes::BREAK => {
+                            Ops::Break => {
                                 // Simply stop the while
                                 stopped = true;
                             }
@@ -689,7 +674,7 @@ pub fn run_ast(
             /*
              * Handle return statements
              */
-            op_codes::RETURN => {
+            Ops::Return => {
                 let statement =
                     downcast_val::<ast_operations::ReturnStatement>(operation.as_self());
 
@@ -708,7 +693,7 @@ pub fn run_ast(
             /*
              * Handle if statements
              */
-            op_codes::IF_CONDITIONAL => {
+            Ops::IfConditional => {
                 let if_statement =
                     downcast_val::<ast_operations::IfConditional>(operation.as_self());
 
@@ -744,7 +729,7 @@ pub fn run_ast(
             /*
              * Handle function definitions
              */
-            op_codes::FN_DEF => {
+            Ops::FnDef => {
                 let function = downcast_val::<ast_operations::FnDefinition>(operation.as_self());
 
                 stack
@@ -756,7 +741,7 @@ pub fn run_ast(
             /*
              * Handle variables definitions
              */
-            op_codes::VAR_DEF => {
+            Ops::VarDef => {
                 let variable = downcast_val::<ast_operations::VarDefinition>(operation.as_self());
 
                 let val_type = variable.assignment.interface;
@@ -783,7 +768,7 @@ pub fn run_ast(
             /*
              * Handle variable assignments
              */
-            op_codes::VAR_ASSIGN => {
+            Ops::VarAssign => {
                 let variable = downcast_val::<ast_operations::VarAssignment>(operation.as_self());
 
                 let is_pointer = variable.var_name.starts_with('&');
@@ -810,7 +795,7 @@ pub fn run_ast(
             /*
              * Handle function calls
              */
-            op_codes::FN_CALL => {
+            Ops::FnCall => {
                 let fn_call = downcast_val::<ast_operations::FnCall>(operation.as_self());
 
                 let is_referenced = fn_call.reference_to.is_some();
@@ -838,7 +823,7 @@ pub fn run_ast(
                     if is_referenced {
                         let reference_to = fn_call.reference_to.as_ref().unwrap();
                         arguments.push(BoxedValue {
-                            interface: op_codes::STRING,
+                            interface: Ops::String,
                             value: Box::new(StringVal(reference_to.to_string())),
                         });
                     }

@@ -1,11 +1,11 @@
 pub mod ast_operations {
 
     use crate::types::{IndexedTokenList, Token, TokensList};
-    use crate::utils::op_codes::Directions;
     use crate::utils::primitive_values::{
         BooleanValueBase, NumberValueBase, PrimitiveValueBase, StringValueBase,
     };
-    use crate::utils::{op_codes, primitive_values};
+    use crate::utils::Directions;
+    use crate::utils::{primitive_values, Ops};
     use erased_serde::serialize_trait_object;
     use serde::Serialize;
     use std::any::Any;
@@ -13,7 +13,7 @@ pub mod ast_operations {
 
     /* BASE */
     pub trait AstBase: dyn_clone::DynClone + erased_serde::Serialize + std::fmt::Debug {
-        fn get_type(&self) -> op_codes::Val;
+        fn get_type(&self) -> Ops;
         fn as_self(&self) -> &dyn Any;
     }
 
@@ -32,8 +32,8 @@ pub mod ast_operations {
 
     // Implement base methods for REFERENCE
     impl AstBase for Break {
-        fn get_type(&self) -> usize {
-            op_codes::BREAK
+        fn get_type(&self) -> Ops {
+            Ops::Break
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -88,8 +88,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for Module {
-        fn get_type(&self) -> usize {
-            op_codes::MODULE
+        fn get_type(&self) -> Ops {
+            Ops::Module
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -104,8 +104,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for ReturnStatement {
-        fn get_type(&self) -> usize {
-            op_codes::RETURN
+        fn get_type(&self) -> Ops {
+            Ops::Return
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -114,18 +114,18 @@ pub mod ast_operations {
 
     /* RESULT EXPRESSION */
     pub trait ResultExpressionBase {
-        fn new(relation: op_codes::Val, left: BoxedValue, right: BoxedValue) -> Self;
+        fn new(relation: Ops, left: BoxedValue, right: BoxedValue) -> Self;
     }
 
     #[derive(Clone, Debug, Serialize)]
     pub struct ResultExpression {
         pub left: BoxedValue,
-        pub relation: op_codes::Val,
+        pub relation: Ops,
         pub right: BoxedValue,
     }
 
     impl ResultExpressionBase for ResultExpression {
-        fn new(relation: op_codes::Val, left: BoxedValue, right: BoxedValue) -> Self {
+        fn new(relation: Ops, left: BoxedValue, right: BoxedValue) -> Self {
             Self {
                 left,
                 relation,
@@ -135,8 +135,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for ResultExpression {
-        fn get_type(&self) -> usize {
-            op_codes::RES_EXPRESSION
+        fn get_type(&self) -> Ops {
+            Ops::ResExpression
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -161,8 +161,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for IfConditional {
-        fn get_type(&self) -> usize {
-            op_codes::IF_CONDITIONAL
+        fn get_type(&self) -> Ops {
+            Ops::IfConditional
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -201,8 +201,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for FnDefinition {
-        fn get_type(&self) -> usize {
-            op_codes::FN_DEF
+        fn get_type(&self) -> Ops {
+            Ops::FnDef
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -234,8 +234,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for VarDefinition {
-        fn get_type(&self) -> usize {
-            op_codes::VAR_DEF
+        fn get_type(&self) -> Ops {
+            Ops::VarDef
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -267,8 +267,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for VarAssignment {
-        fn get_type(&self) -> usize {
-            op_codes::VAR_ASSIGN
+        fn get_type(&self) -> Ops {
+            Ops::VarAssign
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -279,13 +279,13 @@ pub mod ast_operations {
 
     #[derive(Clone, Debug, Serialize)]
     pub struct BoxedValue {
-        pub interface: op_codes::Val,
+        pub interface: Ops,
         pub value: Box<dyn primitive_values::PrimitiveValueBase>,
     }
 
     impl AstBase for BoxedValue {
-        fn get_type(&self) -> usize {
-            op_codes::LEFT_ASSIGN
+        fn get_type(&self) -> Ops {
+            Ops::LeftAssign
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -303,13 +303,13 @@ pub mod ast_operations {
     #[derive(Clone, Debug, Serialize)]
     pub struct Expression {
         pub body: Vec<Box<dyn self::AstBase>>,
-        pub token_type: op_codes::Val,
+        pub token_type: Ops,
         pub expr_id: String,
     }
 
     impl AstBase for Expression {
-        fn get_type(&self) -> usize {
-            op_codes::EXPRESSION
+        fn get_type(&self) -> Ops {
+            Ops::Expression
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -324,14 +324,14 @@ pub mod ast_operations {
     impl ExpressionBase for Expression {
         fn new() -> Self {
             Self {
-                token_type: op_codes::EXPRESSION,
+                token_type: Ops::Expression,
                 body: Vec::new(),
                 expr_id: Uuid::new_v4().to_string(),
             }
         }
         fn from_body(body: Vec<Box<dyn self::AstBase>>) -> Self {
             Self {
-                token_type: op_codes::EXPRESSION,
+                token_type: Ops::Expression,
                 body,
                 // TODO: Move away from Uuid
                 expr_id: Uuid::new_v4().to_string(),
@@ -343,15 +343,15 @@ pub mod ast_operations {
 
     #[derive(Clone, Serialize, Debug)]
     pub struct FnCall {
-        pub token_type: op_codes::Val,
+        pub token_type: Ops,
         pub fn_name: String,
         pub arguments: Vec<BoxedValue>,
         pub reference_to: Option<String>,
     }
 
     impl AstBase for FnCall {
-        fn get_type(&self) -> usize {
-            op_codes::FN_CALL
+        fn get_type(&self) -> Ops {
+            Ops::FnCall
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -365,7 +365,7 @@ pub mod ast_operations {
     impl FnCallBase for FnCall {
         fn new(fn_name: String, reference_to: Option<String>) -> Self {
             Self {
-                token_type: op_codes::FN_CALL,
+                token_type: Ops::FnCall,
                 fn_name,
                 arguments: Vec::new(),
                 reference_to,
@@ -388,8 +388,8 @@ pub mod ast_operations {
     }
 
     impl AstBase for While {
-        fn get_type(&self) -> usize {
-            op_codes::WHILE_DEF
+        fn get_type(&self) -> Ops {
+            Ops::WhileDef
         }
         fn as_self(&self) -> &dyn Any {
             self
@@ -411,7 +411,7 @@ pub mod ast_operations {
      */
     pub fn get_tokens_from_to_fn(
         from: usize,
-        to: op_codes::Val,
+        to: Ops,
         tokens: TokensList,
         direction: Directions,
     ) -> IndexedTokenList {
@@ -465,7 +465,7 @@ pub mod ast_operations {
             "true" => (
                 1,
                 BoxedValue {
-                    interface: op_codes::BOOLEAN,
+                    interface: Ops::Boolean,
                     value: Box::new(primitive_values::Boolean::new(true)),
                 },
             ),
@@ -473,7 +473,7 @@ pub mod ast_operations {
             "false" => (
                 1,
                 BoxedValue {
-                    interface: op_codes::BOOLEAN,
+                    interface: Ops::Boolean,
                     value: Box::new(primitive_values::Boolean::new(false)),
                 },
             ),
@@ -481,7 +481,7 @@ pub mod ast_operations {
             val if val.parse::<usize>().is_ok() => (
                 1,
                 BoxedValue {
-                    interface: op_codes::NUMBER,
+                    interface: Ops::Number,
                     value: Box::new(primitive_values::Number::new(val.parse::<usize>().unwrap())),
                 },
             ),
@@ -489,7 +489,7 @@ pub mod ast_operations {
             val if val.starts_with('"') && val.ends_with('"') => (
                 1,
                 BoxedValue {
-                    interface: op_codes::STRING,
+                    interface: Ops::String,
                     value: Box::new(primitive_values::StringVal::new(val.replace('"', ""))),
                 },
             ),
@@ -504,14 +504,14 @@ pub mod ast_operations {
                     };
 
                     let reference_type = match next_token.ast_type {
-                        op_codes::OPEN_PARENT => op_codes::FN_CALL,
-                        op_codes::CLOSE_PARENT => op_codes::FN_CALL,
-                        op_codes::PROP_ACCESS => op_codes::PROP_ACCESS,
-                        _ => 0,
+                        Ops::OpenParent => Ops::FnCall,
+                        Ops::CloseParent => Ops::FnCall,
+                        Ops::PropAccess => Ops::PropAccess,
+                        _ => Ops::Invalid,
                     };
 
                     match reference_type {
-                        op_codes::PROP_ACCESS => {
+                        Ops::PropAccess => {
                             let after_next_token = tokens[token_n + 2].clone();
                             let (size, val) = get_assignment_token_fn(
                                 after_next_token.value,
@@ -523,7 +523,7 @@ pub mod ast_operations {
                             (size + 2, val)
                         }
 
-                        op_codes::FN_CALL => {
+                        Ops::FnCall => {
                             // Position where it will be starting getting the argument tokens
                             let starting_token: usize = {
                                 match direction {
@@ -537,14 +537,14 @@ pub mod ast_operations {
                                 match direction {
                                     Directions::LeftToRight => get_tokens_from_to_fn(
                                         starting_token,
-                                        op_codes::CLOSE_PARENT,
+                                        Ops::CloseParent,
                                         tokens.clone(),
                                         direction.clone(),
                                     ),
                                     // WIP
                                     Directions::RightToLeft => get_tokens_from_to_fn(
                                         starting_token,
-                                        op_codes::IF_CONDITIONAL,
+                                        Ops::IfConditional,
                                         tokens.clone(),
                                         direction.clone(),
                                     ),
@@ -571,7 +571,7 @@ pub mod ast_operations {
                                     if token_n > 0 {
                                         let previous_token = tokens[token_n - 1].clone();
                                         match previous_token.ast_type {
-                                            op_codes::PROP_ACCESS => {
+                                            Ops::PropAccess => {
                                                 Some(tokens[token_n - 2].value.clone())
                                             }
                                             _ => None,
@@ -593,7 +593,7 @@ pub mod ast_operations {
                             (
                                 arguments_tokens.len() + 3,
                                 BoxedValue {
-                                    interface: op_codes::FN_CALL,
+                                    interface: Ops::FnCall,
                                     value: Box::new(ast_token),
                                 },
                             )
@@ -601,7 +601,7 @@ pub mod ast_operations {
                         _ => (
                             1,
                             BoxedValue {
-                                interface: op_codes::REFERENCE,
+                                interface: Ops::Reference,
                                 value: Box::new(Reference::new(String::from(val))),
                             },
                         ),
@@ -610,7 +610,7 @@ pub mod ast_operations {
                     (
                         1,
                         BoxedValue {
-                            interface: op_codes::REFERENCE,
+                            interface: Ops::Reference,
                             value: Box::new(Reference::new(String::from(val))),
                         },
                     )
@@ -632,9 +632,9 @@ pub mod ast_operations {
 
             match token.ast_type {
                 // Ignore ( ) and ,
-                op_codes::OPEN_PARENT => token_n += 1,
-                op_codes::CLOSE_PARENT => token_n += 1,
-                op_codes::COMMA_DELIMITER => token_n += 1,
+                Ops::OpenParent => token_n += 1,
+                Ops::CloseParent => token_n += 1,
+                Ops::CommaDelimiter => token_n += 1,
                 _ => {
                     let assigned_token = get_assignment_token_fn(
                         token.value.clone(),
@@ -644,7 +644,7 @@ pub mod ast_operations {
                     );
 
                     match assigned_token.1.interface {
-                        op_codes::FN_CALL => token_n += assigned_token.0 + 1,
+                        Ops::FnCall => token_n += assigned_token.0 + 1,
                         _ => token_n += 1,
                     }
 
@@ -669,7 +669,7 @@ pub mod ast_operations {
             let token = tokens[token_n].clone();
 
             match token.ast_type {
-                op_codes::EQUAL_CONDITION | op_codes::NOT_EQUAL_CONDITION => {
+                Ops::EqualCondition | Ops::NotEqualCondition => {
                     let right_token = tokens[token_n + 1].clone();
 
                     let left_token = get_assignment_token_fn(

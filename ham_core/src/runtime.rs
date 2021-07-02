@@ -4,7 +4,7 @@ use crate::stack::{FunctionDef, FunctionsContainer, Stack};
 use crate::types::BoxedPrimitiveValue;
 use crate::utils::errors::raise_error;
 use crate::utils::primitive_values::{Number, NumberValueBase, StringVal};
-use crate::utils::{errors, op_codes, primitive_values};
+use crate::utils::{errors, primitive_values, Ops};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
@@ -19,24 +19,24 @@ pub fn downcast_val<T: 'static>(val: &dyn Any) -> &T {
 /*
  * Force the transformation from a primitive type into a String
  */
-pub fn value_to_string(value: BoxedValue, stack: &Mutex<Stack>) -> Result<String, usize> {
+pub fn value_to_string(value: BoxedValue, stack: &Mutex<Stack>) -> Result<String, Ops> {
     match value.interface {
-        op_codes::BOOLEAN => Ok(
+        Ops::Boolean => Ok(
             downcast_val::<primitive_values::Boolean>(value.value.as_self())
                 .0
                 .to_string(),
         ),
-        op_codes::STRING => Ok(
+        Ops::String => Ok(
             downcast_val::<primitive_values::StringVal>(value.value.as_self())
                 .0
                 .clone(),
         ),
-        op_codes::NUMBER => Ok(
+        Ops::Number => Ok(
             downcast_val::<primitive_values::Number>(value.value.as_self())
                 .0
                 .to_string(),
         ),
-        op_codes::POINTER => {
+        Ops::Pointer => {
             let pointer = downcast_val::<primitive_values::Pointer>(value.value.as_self()).0;
             let variable = stack.lock().unwrap().get_variable_by_id(pointer).unwrap();
 
@@ -65,14 +65,14 @@ pub fn values_to_strings(values: Vec<BoxedValue>, stack: &Mutex<Stack>) -> Vec<S
 /*
  * Returns the methods for the specified primitive type
  */
-pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionDef> {
+pub fn get_methods_in_type(val_type: Ops) -> HashMap<String, FunctionDef> {
     let mut res = HashMap::new();
 
     match val_type {
         /*
          * Methods for numbers
          */
-        op_codes::NUMBER => {
+        Ops::Number => {
             /*
              * function: sum()
              *
@@ -102,7 +102,7 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
                                 let new_val = Number::new(current_val + new_val);
 
                                 Some(BoxedValue {
-                                    interface: op_codes::NUMBER,
+                                    interface: Ops::Number,
                                     value: Box::new(new_val),
                                 })
                             }
@@ -142,7 +142,7 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
                             stack.lock().unwrap().modify_var(
                                 var_name,
                                 BoxedValue {
-                                    interface: op_codes::NUMBER,
+                                    interface: Ops::Number,
                                     value: Box::new(new_val),
                                 },
                             );
@@ -159,12 +159,12 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
         /*
          * TODO: Methods for strings
          */
-        op_codes::STRING => {}
+        Ops::String => {}
 
         /*
          * TODO: Methods for booleans
          */
-        op_codes::BOOLEAN => {}
+        Ops::Boolean => {}
         _ => (),
     }
 
@@ -177,12 +177,12 @@ pub fn get_methods_in_type(val_type: op_codes::Val) -> HashMap<String, FunctionD
  */
 pub fn resolve_reference(
     stack: &Mutex<Stack>,
-    val_type: op_codes::Val,
+    val_type: Ops,
     ref_val: BoxedPrimitiveValue,
     ast: &MutexGuard<ast_operations::Expression>,
 ) -> Option<BoxedValue> {
     match val_type {
-        op_codes::POINTER => {
+        Ops::Pointer => {
             let pointer = downcast_val::<primitive_values::Pointer>(ref_val.as_self()).0;
             let variable = stack.lock().unwrap().get_variable_by_id(pointer);
 
@@ -196,19 +196,19 @@ pub fn resolve_reference(
                 None
             }
         }
-        op_codes::STRING => Some(BoxedValue {
+        Ops::String => Some(BoxedValue {
             interface: val_type,
             value: ref_val,
         }),
-        op_codes::BOOLEAN => Some(BoxedValue {
+        Ops::Boolean => Some(BoxedValue {
             interface: val_type,
             value: ref_val,
         }),
-        op_codes::NUMBER => Some(BoxedValue {
+        Ops::Number => Some(BoxedValue {
             interface: val_type,
             value: ref_val,
         }),
-        op_codes::REFERENCE => {
+        Ops::Reference => {
             let mut referenced_variable =
                 downcast_val::<ast_operations::Reference>(ref_val.as_self()).clone();
 
@@ -228,7 +228,7 @@ pub fn resolve_reference(
                 if is_pointer {
                     // Return a pointer
                     Some(BoxedValue {
-                        interface: op_codes::POINTER,
+                        interface: Ops::Pointer,
                         value: Box::new(primitive_values::Pointer(variable.var_id)),
                     })
                 } else {
@@ -243,7 +243,7 @@ pub fn resolve_reference(
                 None
             }
         }
-        op_codes::FN_CALL => {
+        Ops::FnCall => {
             let fn_call = downcast_val::<ast_operations::FnCall>(ref_val.as_self());
 
             let is_referenced = fn_call.reference_to.is_some();
@@ -273,7 +273,7 @@ pub fn resolve_reference(
                 if is_referenced {
                     let reference_to = fn_call.reference_to.as_ref().unwrap();
                     arguments.push(BoxedValue {
-                        interface: op_codes::STRING,
+                        interface: Ops::String,
                         value: Box::new(StringVal(reference_to.to_string())),
                     });
                 }

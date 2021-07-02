@@ -1,44 +1,41 @@
-pub mod op_codes {
+use serde::Serialize;
 
-    #[derive(Clone)]
-    pub enum Directions {
-        LeftToRight,
-        RightToLeft,
-    }
+#[derive(Clone)]
+pub enum Directions {
+    LeftToRight,
+    RightToLeft,
+}
 
-    pub type Val = usize;
-
-    /*
-     * Each code identifies a different type of token / operation
-     */
-
-    pub const REFERENCE: Val = 0;
-    pub const VAR_DEF: Val = 1;
-    pub const LEFT_ASSIGN: Val = 2;
-    pub const EXPRESSION: Val = 3;
-    pub const FN_CALL: Val = 4;
-    pub const OPEN_PARENT: Val = 5;
-    pub const CLOSE_PARENT: Val = 6;
-    pub const BOOLEAN: Val = 7;
-    pub const NUMBER: Val = 8;
-    pub const STRING: Val = 9;
-    pub const VAR_ASSIGN: Val = 10;
-    pub const FN_DEF: Val = 11;
-    pub const OPEN_BLOCK: Val = 12;
-    pub const CLOSE_BLOCK: Val = 13;
-    pub const IF_CONDITIONAL: Val = 14;
-    pub const RES_EXPRESSION: Val = 15;
-    pub const EQUAL_CONDITION: Val = 16; // ==
-    pub const RETURN: Val = 17; // return
-    pub const PROP_ACCESS: Val = 18; // .
-    pub const COMMA_DELIMITER: Val = 19; //,
-    pub const WHILE_DEF: Val = 20;
-    pub const NOT_EQUAL_CONDITION: Val = 21; // !=
-    pub const POINTER: Val = 22;
-    pub const IMPORT: Val = 23;
-    pub const MODULE: Val = 24;
-    pub const FROM_MODULE: Val = 25; // from
-    pub const BREAK: Val = 26; // break
+#[derive(Clone, Debug, Serialize, PartialEq, Copy)]
+pub enum Ops {
+    Invalid,
+    Reference,
+    VarDef,
+    LeftAssign,
+    Expression,
+    FnCall,
+    OpenParent,
+    CloseParent,
+    Boolean,
+    Number,
+    String,
+    VarAssign,
+    FnDef,
+    OpenBlock,
+    CloseBlock,
+    IfConditional,
+    ResExpression,
+    EqualCondition,
+    Return,
+    PropAccess,
+    CommaDelimiter,
+    WhileDef,
+    NotEqualCondition,
+    Pointer,
+    Import,
+    Module,
+    FromModule,
+    Break,
 }
 
 pub mod primitive_values {

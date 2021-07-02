@@ -2,7 +2,7 @@ use crate::ast::ast_operations;
 use crate::ast::ast_operations::{AstBase, BoxedValue};
 use crate::runtime::{downcast_val, value_to_string, values_to_strings};
 use crate::utils::primitive_values::StringVal;
-use crate::utils::{errors, op_codes, primitive_values};
+use crate::utils::{errors, primitive_values, Ops};
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 use std::{thread, time};
@@ -13,7 +13,7 @@ use std::{thread, time};
 #[derive(Clone)]
 pub struct VariableDef {
     pub name: String,
-    pub val_type: op_codes::Val,
+    pub val_type: Ops,
     pub value: Box<dyn primitive_values::PrimitiveValueBase>,
     pub expr_id: String,
     pub functions: HashMap<String, FunctionDef>,
@@ -144,7 +144,7 @@ impl Stack {
                     }
 
                     Some(BoxedValue {
-                        interface: op_codes::STRING,
+                        interface: Ops::String,
                         value: Box::new(StringVal(template)),
                     })
                 },
@@ -329,7 +329,7 @@ impl Stack {
         // If variable exists
         if let Some(variable) = variable {
             // Is pointer
-            if variable.val_type == op_codes::POINTER {
+            if variable.val_type == Ops::Pointer {
                 let variable = variable.clone();
 
                 let pointer = downcast_val::<primitive_values::Pointer>(variable.value.as_self());
