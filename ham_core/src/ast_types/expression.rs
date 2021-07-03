@@ -1,5 +1,6 @@
 use crate::{
     ast_types::ast_base::AstBase,
+    primitive_values::primitive_base::PrimitiveValueBase,
     utils::Ops,
 };
 use serde::Serialize;
@@ -13,6 +14,12 @@ pub struct Expression {
     pub body: Vec<Box<dyn self::AstBase>>,
     pub token_type: Ops,
     pub expr_id: String,
+}
+
+impl PrimitiveValueBase for Expression {
+    fn as_self(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl AstBase for Expression {

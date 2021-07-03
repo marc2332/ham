@@ -183,6 +183,9 @@ pub fn get_tokens(code: String) -> TokensList {
     self::transform_into_tokens(lines)
 }
 
+/*
+ * Create a ast tree from some tokens
+ */
 pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, filedir: String) {
     let mut ast_tree = ast_tree.lock().unwrap();
 
@@ -228,6 +231,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
     while token_n < tokens.len() {
         let current_token = &tokens[token_n];
         match current_token.ast_type {
+            // Break statement
             Ops::Break => {
                 let break_ast = Break::new();
                 ast_tree.body.push(Box::new(break_ast));
@@ -374,6 +378,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
                 ast_tree.body.push(Box::new(ast_token));
             }
 
+            // Property access
             Ops::PropAccess => {
                 let previous_token = tokens[token_n - 1].clone();
                 let next_token = tokens[token_n + 1].clone();
@@ -454,6 +459,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
                 let ast_token = FnDefinition::new(def_name, body.to_vec(), arguments);
                 ast_tree.body.push(Box::new(ast_token));
             }
+
             // Variable definition
             Ops::VarDef => {
                 let next_token = tokens[token_n + 1].clone();
@@ -472,8 +478,9 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
                 let ast_token = VarDefinition::new(def_name, assignment);
                 ast_tree.body.push(Box::new(ast_token));
 
-                token_n += 3 + size;
+                token_n += size + 3;
             }
+
             // References (fn calls, variable reassignation...)
             Ops::Reference => {
                 let next_token = &tokens[token_n + 1];
@@ -508,6 +515,7 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
                             Ops::OpenParent,
                             Ops::CloseParent,
                         );
+
                         let arguments = convert_tokens_into_arguments(arguments_tokens.clone());
 
                         token_n += 3 + arguments_tokens.len();
@@ -528,6 +536,9 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
     }
 }
 
+/*
+ * Shorthand to create a function definition
+ */
 fn get_function_from_def(function: &FnDefinition) -> FunctionDef {
     FunctionDef {
         name: function.def_name.clone(),
@@ -565,6 +576,9 @@ fn get_function_from_def(function: &FnDefinition) -> FunctionDef {
     }
 }
 
+/*
+ * Execute a AST tree
+ */
 pub fn run_ast(ast: &Mutex<Expression>, stack: &Mutex<Stack>) -> Option<BoxedValue> {
     let ast = ast.lock().unwrap();
 

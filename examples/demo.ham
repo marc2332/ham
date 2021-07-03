@@ -1,4 +1,3 @@
-
 fn until(x){
     let c = 0
     while c != x {
@@ -23,3 +22,33 @@ fn mod(x) {
 }
 
 let val = mod(0)
+
+fn o() {
+    return 10
+}
+
+let val = o().sum(1).sum(1).sum(3)
+
+// 15
+println(val)
+
+// 20
+println(val.sum(3).sum(2))
+
+
+
+
+let n = 0
+
+fn lol(arg1 arg2){
+    println(format("A: {}, B: {}", arg1, arg2))
+}
+
+lol(
+    n.sum(1),
+    n.sum(2)
+)
+
+
+
+

@@ -14,6 +14,7 @@ use crate::{
         pointer::Pointer,
         string::StringVal,
     },
+    run_ast,
     stack::{
         FunctionDef,
         FunctionsContainer,
@@ -136,6 +137,15 @@ pub fn resolve_reference(
     ast: &MutexGuard<Expression>,
 ) -> Option<BoxedValue> {
     match val_type {
+        Ops::Expression => {
+            let expr = downcast_val::<Expression>(ref_val.as_self());
+            let res = run_ast(&Mutex::new(expr.clone()), stack);
+
+            stack.lock().unwrap().drop_ops_from_id(expr.expr_id.clone());
+
+            res
+        }
+
         Ops::Pointer => {
             let pointer = downcast_val::<Pointer>(ref_val.as_self()).0;
             let variable = stack.lock().unwrap().get_variable_by_id(pointer);
