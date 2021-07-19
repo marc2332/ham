@@ -483,12 +483,17 @@ pub fn move_tokens_into_ast(tokens: TokensList, ast_tree: &Mutex<Expression>, fi
 
             // References (fn calls, variable reassignation...)
             Ops::Reference => {
-                let next_token = &tokens[token_n + 1];
-
-                let reference_type = match next_token.ast_type {
-                    Ops::OpenParent => Ops::FnCall,
-                    Ops::LeftAssign => Ops::VarAssign,
-                    _ => Ops::Invalid,
+                let reference_type = {
+                    if token_n < tokens.len() - 1 {
+                        let next_token = &tokens[token_n + 1];
+                        match next_token.ast_type {
+                            Ops::OpenParent => Ops::FnCall,
+                            Ops::LeftAssign => Ops::VarAssign,
+                            _ => Ops::Invalid,
+                        }
+                    } else {
+                        Ops::Invalid
+                    }
                 };
 
                 match reference_type {

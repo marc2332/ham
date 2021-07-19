@@ -1,0 +1,11 @@
+fn test(n){
+  println("")
+  println(format("Starting from {}...", n))
+  while n != 5 {
+    println(format("Value is {}", n))
+    n.mut_sum(1)
+  }
+}
+
+test(0)
+test(4)

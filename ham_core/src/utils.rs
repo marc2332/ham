@@ -58,7 +58,7 @@ pub mod errors {
         // Module is not found (ex, file's path is not correct)
         ModuleNotFound,
 
-        // Got a keyword instead of another one
+        // Got a wrong keyword
         UnexpectedKeyword,
     }
 
@@ -67,15 +67,21 @@ pub mod errors {
             CODES::FunctionNotFound => format!("Function '{}' was not found", args[0]),
             CODES::VariableNotFound => format!("Variable '{}' was not found", args[0].blue()),
             CODES::ReturnedValueNotUsed => {
+                // Function's name length + arguments length + ()
+                let lines = "¯".repeat(args[1].len() + args[2].len() + 2);
                 format!(
-                    "Returned value '{}' by function '{}' is not used\n
-    let value = {}({});
+                    "Returned value '{value}' by function '{fn_name}' is not used\n
+    let value = {fn_name}({call_args});
     ¯¯¯¯¯¯¯¯¯
-    ↑ Help: Assign the return value to a variable. ",
-                    args[0].blue(),
-                    args[1].blue(),
-                    args[1].blue(),
-                    args[2]
+    ↑ Help: Assign the return value to a variable. 
+
+    println({fn_name}({call_args}));
+            {lines}
+    ↑ Help: Wrap it as a function argument.",
+                    value = args[0].blue(),
+                    fn_name = args[1].blue(),
+                    call_args = args[2],
+                    lines = lines
                 )
             }
             CODES::BrokenPointer => {
